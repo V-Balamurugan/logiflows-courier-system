@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: logiflows_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-logiflows_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-logiflows_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-logiflows_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-logiflows_user} -d ${POSTGRES_DB:-logiflows_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: logiflows_backend
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=production
+      - PROJECT_NAME=LogiFlows Courier Management System
+      - API_V1_STR=/api/v1
+      - SECRET_KEY=${SECRET_KEY:-logiflows-production-super-secret-key-32-chars-minimum-needed}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-logiflows_user}:${POSTGRES_PASSWORD:-logiflows_pass}@postgres:5432/${POSTGRES_DB:-logiflows_db}
+      - CORS_ORIGINS=["http://localhost:5173","http://localhost:3000","http://127.0.0.1:5173","http://localhost"]
+      - FIRST_SUPERADMIN_EMAIL=${FIRST_SUPERADMIN_EMAIL:-superadmin@logiflows.com}
+      - FIRST_SUPERADMIN_PASSWORD=${FIRST_SUPERADMIN_PASSWORD:-SuperAdmin@LogiFlows2026!}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: logiflows_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: logiflows_n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=AdminPassword2026!
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+volumes:
+  pgdata:
+  n8n_data:
+
