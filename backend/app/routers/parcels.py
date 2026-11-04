@@ -62,8 +62,8 @@ def get_parcel(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Retrieves full parcel details and milestone tracking history."""
-    return ParcelService.get_parcel_by_tracking(db, tracking_number)
+    """Retrieves full parcel details and milestone tracking history (tenant-scoped)."""
+    return ParcelService.get_parcel_by_tracking(db, tracking_number, current_user=current_user)
 
 
 @router.post("/{tracking_number}/cancel", response_model=ParcelResponse)
@@ -83,8 +83,8 @@ def download_label_pdf(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Generates and downloads a printable PDF shipping label with QR code."""
-    pdf_bytes = ParcelService.get_shipping_label_pdf(db, tracking_number)
+    """Generates and downloads a printable PDF shipping label with QR code (tenant-scoped)."""
+    pdf_bytes = ParcelService.get_shipping_label_pdf(db, tracking_number, current_user=current_user)
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",

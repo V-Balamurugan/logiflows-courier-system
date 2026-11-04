@@ -1,5 +1,5 @@
 from typing import List, Union
-from pydantic import AnyHttpUrl, field_validator
+from pydantic import AnyHttpUrl, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import json
 
@@ -38,12 +38,32 @@ class Settings(BaseSettings):
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
         if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",")]
+            return [i.strip() for i in v.split(",") if i.strip()]
         elif isinstance(v, str) and v.startswith("["):
             return json.loads(v)
         elif isinstance(v, list):
             return v
         return []
+
+    @model_validator(mode="after")
+    def validate_production_settings(self) -> "Settings":
+        env = (self.ENVIRONMENT or "").strip().lower()
+        if env == "production":
+            insecure_defaults = [
+                "logiflows-production-super-secret-key-32-chars-minimum-needed-for-jwt-signing",
+                "secret",
+                "changeme",
+                "admin",
+            ]
+            if not self.SECRET_KEY or self.SECRET_KEY in insecure_defaults or len(self.SECRET_KEY) < 32:
+                raise ValueError(
+                    "Production environment requires an explicit, secure SECRET_KEY of at least 32 characters set via environment."
+                )
+            if "*" in self.CORS_ORIGINS:
+                raise ValueError("Production environment does not allow wildcard '*' in CORS_ORIGINS.")
+            if self.DATABASE_URL.startswith("sqlite"):
+                raise ValueError("Production environment requires PostgreSQL; SQLite is not allowed.")
+        return self
 
 
 settings = Settings()

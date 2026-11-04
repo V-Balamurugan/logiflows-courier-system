@@ -36,6 +36,11 @@ class AnalyticsService:
             emp_q = emp_q.filter(User.branch_id == current_user.branch_id)
             veh_q = veh_q.filter(Vehicle.branch_id == current_user.branch_id)
         elif role == UserRole.ORG_ADMIN and current_user.organization_id:
+            org_branch_ids = [b.id for b in current_user.organization.branches] if current_user.organization else []
+            parcel_q = parcel_q.filter(
+                (Parcel.origin_branch_id.in_(org_branch_ids)) |
+                (Parcel.dest_branch_id.in_(org_branch_ids))
+            )
             emp_q = emp_q.filter(User.organization_id == current_user.organization_id)
             veh_q = veh_q.filter(Vehicle.organization_id == current_user.organization_id)
 

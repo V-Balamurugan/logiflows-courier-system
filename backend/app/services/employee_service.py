@@ -74,10 +74,10 @@ class EmployeeService:
             raise HTTPException(status_code=404, detail="Employee not found")
 
         if current_user.role != UserRole.SUPER_ADMIN and emp.organization_id != current_user.organization_id:
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise HTTPException(status_code=404, detail="Employee not found")
 
         if current_user.role == UserRole.BRANCH_MANAGER and emp.branch_id != current_user.branch_id:
-            raise HTTPException(status_code=403, detail="Access restricted to your branch")
+            raise HTTPException(status_code=404, detail="Employee not found")
 
         return emp
 
@@ -93,10 +93,8 @@ class EmployeeService:
         return emp
 
     @staticmethod
-    def get_employee_workload(db: Session, employee_id: int) -> EmployeeWorkloadResponse:
-        emp = db.query(User).filter(User.id == employee_id).first()
-        if not emp:
-            raise HTTPException(status_code=404, detail="Employee not found")
+    def get_employee_workload(db: Session, current_user: User, employee_id: int) -> EmployeeWorkloadResponse:
+        emp = EmployeeService.get_employee(db, current_user, employee_id)
 
         active_count = db.query(DeliveryAssignment).filter(
             DeliveryAssignment.employee_id == employee_id,

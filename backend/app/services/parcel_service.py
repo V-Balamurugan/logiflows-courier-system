@@ -37,6 +37,11 @@ class ParcelService:
         if not dest_branch:
             raise HTTPException(status_code=400, detail="Invalid destination branch")
 
+        # Staff can only create parcels originating from their organization
+        if current_user.role not in [UserRole.CUSTOMER, UserRole.SUPER_ADMIN]:
+            if current_user.organization_id and origin_branch.organization_id != current_user.organization_id:
+                raise HTTPException(status_code=400, detail="Origin branch does not belong to your organization")
+
         # Calculate pricing
         quote = PricingEngine.calculate_quote(
             weight_kg=data.weight_kg,
@@ -154,18 +159,29 @@ class ParcelService:
         return query.order_by(Parcel.created_at.desc()).all()
 
     @staticmethod
-    def get_parcel_by_tracking(db: Session, tracking_number: str) -> Parcel:
+    def get_parcel_by_tracking(db: Session, tracking_number: str, current_user: Optional[User] = None) -> Parcel:
         parcel = db.query(Parcel).filter(Parcel.tracking_number == tracking_number).first()
         if not parcel:
             raise HTTPException(status_code=404, detail="Parcel not found")
+        if current_user:
+            if current_user.role == UserRole.CUSTOMER:
+                if parcel.customer_id != current_user.id:
+                    raise HTTPException(status_code=404, detail="Parcel not found")
+            elif current_user.role != UserRole.SUPER_ADMIN:
+                if not current_user.organization_id:
+                    raise HTTPException(status_code=404, detail="Parcel not found")
+                origin_org = parcel.origin_branch.organization_id if parcel.origin_branch else None
+                dest_org = parcel.dest_branch.organization_id if parcel.dest_branch else None
+                if origin_org != current_user.organization_id and dest_org != current_user.organization_id:
+                    raise HTTPException(status_code=404, detail="Parcel not found")
+                if current_user.role == UserRole.BRANCH_MANAGER and current_user.branch_id:
+                    if current_user.branch_id not in [parcel.origin_branch_id, parcel.dest_branch_id]:
+                        raise HTTPException(status_code=404, detail="Parcel not found")
         return parcel
 
     @staticmethod
     def cancel_parcel(db: Session, current_user: User, tracking_number: str, req: ParcelCancelRequest) -> Parcel:
-        parcel = ParcelService.get_parcel_by_tracking(db, tracking_number)
-
-        if current_user.role == UserRole.CUSTOMER and parcel.customer_id != current_user.id:
-            raise HTTPException(status_code=403, detail="You do not have permission to cancel this parcel")
+        parcel = ParcelService.get_parcel_by_tracking(db, tracking_number, current_user=current_user)
 
         if parcel.delivery_status != ParcelStatus.BOOKED:
             raise HTTPException(
@@ -191,8 +207,8 @@ class ParcelService:
         return parcel
 
     @staticmethod
-    def get_shipping_label_pdf(db: Session, tracking_number: str) -> bytes:
-        parcel = ParcelService.get_parcel_by_tracking(db, tracking_number)
+    def get_shipping_label_pdf(db: Session, tracking_number: str, current_user: Optional[User] = None) -> bytes:
+        parcel = ParcelService.get_parcel_by_tracking(db, tracking_number, current_user=current_user)
         parcel_dict = {
             "tracking_number": parcel.tracking_number,
             "service_type": parcel.service_type.value,

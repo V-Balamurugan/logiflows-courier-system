@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from app.models.parcel import Parcel
 from app.models.tracking import TrackingHistory
 from app.models.user import User
-from app.models.enums import ParcelStatus
+from app.models.enums import ParcelStatus, UserRole
 from app.schemas.tracking import (
     TrackingUpdateRequest,
     PublicTrackingResponse,
@@ -61,6 +61,14 @@ class TrackingService:
         parcel = db.query(Parcel).filter(Parcel.tracking_number == tracking_number).first()
         if not parcel:
             raise HTTPException(status_code=404, detail="Parcel not found")
+
+        if current_user.role != UserRole.SUPER_ADMIN:
+            if not current_user.organization_id:
+                raise HTTPException(status_code=404, detail="Parcel not found")
+            origin_org = parcel.origin_branch.organization_id if parcel.origin_branch else None
+            dest_org = parcel.dest_branch.organization_id if parcel.dest_branch else None
+            if origin_org != current_user.organization_id and dest_org != current_user.organization_id:
+                raise HTTPException(status_code=404, detail="Parcel not found")
 
         parcel.delivery_status = req.status
         if req.location_name:

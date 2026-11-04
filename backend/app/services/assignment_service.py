@@ -19,6 +19,13 @@ class AssignmentService:
         if not parcel:
             raise HTTPException(status_code=404, detail="Parcel not found")
 
+        # Tenant scoping for parcel
+        if current_user.role != UserRole.SUPER_ADMIN:
+            origin_org = parcel.origin_branch.organization_id if parcel.origin_branch else None
+            dest_org = parcel.dest_branch.organization_id if parcel.dest_branch else None
+            if origin_org != current_user.organization_id and dest_org != current_user.organization_id:
+                raise HTTPException(status_code=404, detail="Parcel not found")
+
         # Check existing active assignment for this parcel
         active_existing = db.query(DeliveryAssignment).filter(
             DeliveryAssignment.parcel_id == data.parcel_id,
@@ -34,11 +41,16 @@ class AssignmentService:
         if not employee or employee.role not in [UserRole.DELIVERY_AGENT, UserRole.BRANCH_MANAGER]:
             raise HTTPException(status_code=400, detail="Invalid delivery employee")
 
+        if current_user.role != UserRole.SUPER_ADMIN and employee.organization_id != current_user.organization_id:
+            raise HTTPException(status_code=404, detail="Delivery employee not found")
+
         vehicle = None
         if data.vehicle_id:
             vehicle = db.query(Vehicle).filter(Vehicle.id == data.vehicle_id, Vehicle.is_active == True).first()
             if not vehicle:
                 raise HTTPException(status_code=400, detail="Vehicle not found or inactive")
+            if current_user.role != UserRole.SUPER_ADMIN and vehicle.organization_id != current_user.organization_id:
+                raise HTTPException(status_code=404, detail="Vehicle not found")
 
         assignment = DeliveryAssignment(
             parcel_id=data.parcel_id,
@@ -82,6 +94,11 @@ class AssignmentService:
     ) -> List[AssignmentResponse]:
         query = db.query(DeliveryAssignment)
 
+        if current_user.role != UserRole.SUPER_ADMIN and current_user.organization_id:
+            query = query.join(User, DeliveryAssignment.employee_id == User.id).filter(
+                User.organization_id == current_user.organization_id
+            )
+
         if current_user.role == UserRole.DELIVERY_AGENT:
             query = query.filter(DeliveryAssignment.employee_id == current_user.id)
         elif employee_id:
@@ -123,8 +140,16 @@ class AssignmentService:
         if not assignment:
             raise HTTPException(status_code=404, detail="Assignment not found")
 
+        # Check tenant isolation
+        if current_user.role != UserRole.SUPER_ADMIN:
+            if not current_user.organization_id:
+                raise HTTPException(status_code=404, detail="Assignment not found")
+            emp_org = assignment.employee.organization_id if assignment.employee else None
+            if emp_org != current_user.organization_id:
+                raise HTTPException(status_code=404, detail="Assignment not found")
+
         if current_user.role == UserRole.DELIVERY_AGENT and assignment.employee_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Cannot modify assignments for other agents")
+            raise HTTPException(status_code=404, detail="Assignment not found")
 
         assignment.status = req.status
         if req.notes:

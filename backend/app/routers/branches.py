@@ -39,8 +39,8 @@ def get_branch(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Retrieves specific branch details by ID."""
-    return BranchService.get_branch_by_id(db, branch_id)
+    """Retrieves specific branch details by ID with tenant isolation."""
+    return BranchService.get_branch_by_id(db, branch_id, current_user=current_user)
 
 
 @router.put("/{branch_id}", response_model=BranchResponse)
@@ -50,8 +50,8 @@ def update_branch(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_org_admin)
 ):
-    """Updates branch metadata and operating status."""
-    return BranchService.update_branch(db, branch_id, data)
+    """Updates branch metadata and operating status within user's organization."""
+    return BranchService.update_branch(db, branch_id, data, current_user=current_user)
 
 
 @router.delete("/{branch_id}")
@@ -60,7 +60,7 @@ def delete_branch(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_org_admin)
 ):
-    """Soft deletes/deactivates a branch."""
-    BranchService.delete_branch(db, branch_id)
+    """Soft deletes/deactivates a branch within user's organization."""
+    BranchService.delete_branch(db, branch_id, current_user=current_user)
     return {"message": "Branch deactivated successfully"}
 

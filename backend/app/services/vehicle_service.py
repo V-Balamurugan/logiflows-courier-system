@@ -57,15 +57,21 @@ class VehicleService:
         return query.order_by(Vehicle.vehicle_number.asc()).all()
 
     @staticmethod
-    def get_vehicle(db: Session, vehicle_id: int) -> Vehicle:
+    def get_vehicle(db: Session, vehicle_id: int, current_user: Optional[User] = None) -> Vehicle:
         vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
         if not vehicle:
             raise HTTPException(status_code=404, detail="Vehicle not found")
+        if current_user and current_user.role != UserRole.SUPER_ADMIN:
+            if not current_user.organization_id or vehicle.organization_id != current_user.organization_id:
+                raise HTTPException(status_code=404, detail="Vehicle not found")
+            if current_user.role == UserRole.BRANCH_MANAGER and current_user.branch_id:
+                if vehicle.branch_id and vehicle.branch_id != current_user.branch_id:
+                    raise HTTPException(status_code=404, detail="Vehicle not found")
         return vehicle
 
     @staticmethod
-    def update_vehicle(db: Session, vehicle_id: int, data: VehicleUpdate) -> Vehicle:
-        vehicle = VehicleService.get_vehicle(db, vehicle_id)
+    def update_vehicle(db: Session, vehicle_id: int, data: VehicleUpdate, current_user: Optional[User] = None) -> Vehicle:
+        vehicle = VehicleService.get_vehicle(db, vehicle_id, current_user=current_user)
         for key, value in data.model_dump(exclude_unset=True).items():
             setattr(vehicle, key, value)
         db.commit()

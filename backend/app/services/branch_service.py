@@ -92,15 +92,18 @@ class BranchService:
         return query.order_by(Branch.branch_name.asc()).all()
 
     @staticmethod
-    def get_branch_by_id(db: Session, branch_id: int) -> Branch:
+    def get_branch_by_id(db: Session, branch_id: int, current_user: Optional[User] = None) -> Branch:
         branch = db.query(Branch).filter(Branch.id == branch_id).first()
         if not branch:
             raise HTTPException(status_code=404, detail="Branch not found")
+        if current_user and current_user.role != UserRole.SUPER_ADMIN:
+            if not current_user.organization_id or branch.organization_id != current_user.organization_id:
+                raise HTTPException(status_code=404, detail="Branch not found")
         return branch
 
     @staticmethod
-    def update_branch(db: Session, branch_id: int, data: BranchUpdate) -> Branch:
-        branch = BranchService.get_branch_by_id(db, branch_id)
+    def update_branch(db: Session, branch_id: int, data: BranchUpdate, current_user: Optional[User] = None) -> Branch:
+        branch = BranchService.get_branch_by_id(db, branch_id, current_user)
         for key, value in data.model_dump(exclude_unset=True).items():
             setattr(branch, key, value)
         db.commit()
@@ -108,8 +111,8 @@ class BranchService:
         return branch
 
     @staticmethod
-    def delete_branch(db: Session, branch_id: int) -> bool:
-        branch = BranchService.get_branch_by_id(db, branch_id)
+    def delete_branch(db: Session, branch_id: int, current_user: Optional[User] = None) -> bool:
+        branch = BranchService.get_branch_by_id(db, branch_id, current_user)
         branch.is_active = False
         db.commit()
         return True
