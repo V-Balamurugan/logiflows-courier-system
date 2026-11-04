@@ -7,6 +7,7 @@ from app.models.parcel import Parcel
 from app.models.tracking import TrackingHistory
 from app.models.user import User
 from app.models.enums import ParcelStatus, UserRole
+from app.services.state_machine import ShipmentStateMachine
 from app.schemas.tracking import (
     TrackingUpdateRequest,
     PublicTrackingResponse,
@@ -70,26 +71,18 @@ class TrackingService:
             if origin_org != current_user.organization_id and dest_org != current_user.organization_id:
                 raise HTTPException(status_code=404, detail="Parcel not found")
 
-        parcel.delivery_status = req.status
-        if req.location_name:
-            parcel.current_location = req.location_name
-
-        now = datetime.now(timezone.utc)
-        if req.status == ParcelStatus.DELIVERED:
-            parcel.actual_delivery_date = now
-
-        history = TrackingHistory(
-            parcel_id=parcel.id,
-            status=req.status,
-            branch_id=req.branch_id or current_user.branch_id,
-            employee_id=current_user.id,
+        updated_parcel = ShipmentStateMachine.transition(
+            db=db,
+            current_user=current_user,
+            parcel=parcel,
+            to_status=req.status,
+            expected_version=req.expected_version,
+            remarks=req.remarks,
             location_name=req.location_name or parcel.current_location,
+            branch_id=req.branch_id or current_user.branch_id,
             latitude=req.latitude,
             longitude=req.longitude,
-            remarks=req.remarks
+            source="API"
         )
-        db.add(history)
-        db.commit()
-        db.refresh(history)
-        return history
+        return updated_parcel.tracking_history[-1]
 

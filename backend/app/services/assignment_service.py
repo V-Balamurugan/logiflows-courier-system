@@ -10,6 +10,7 @@ from app.models.vehicle import Vehicle
 from app.models.tracking import TrackingHistory
 from app.models.enums import AssignmentStatus, AssignmentType, ParcelStatus, VehicleStatus, UserRole
 from app.schemas.assignment import AssignmentCreate, AssignmentStatusUpdate, AssignmentResponse
+from app.services.state_machine import ShipmentStateMachine
 
 
 class AssignmentService:
@@ -62,25 +63,26 @@ class AssignmentService:
             assigned_at=datetime.now(timezone.utc)
         )
         db.add(assignment)
+        db.flush()
 
-        # Update parcel status according to assignment type
-        new_status = ParcelStatus.OUT_FOR_DELIVERY if data.assignment_type == AssignmentType.LAST_MILE else ParcelStatus.PICKUP_SCHEDULED
-        if data.assignment_type == AssignmentType.TRANSFER:
-            new_status = ParcelStatus.IN_TRANSIT
-            
-        parcel.delivery_status = new_status
         if vehicle:
             vehicle.status = VehicleStatus.ASSIGNED
 
-        # Record tracking history
-        tracking_event = TrackingHistory(
-            parcel_id=parcel.id,
-            status=new_status,
-            employee_id=employee.id,
+        # Update parcel status according to assignment type via State Machine
+        new_status = ParcelStatus.OUT_FOR_DELIVERY if data.assignment_type == AssignmentType.LAST_MILE else ParcelStatus.PICKUP_SCHEDULED
+        if data.assignment_type == AssignmentType.TRANSFER:
+            new_status = ParcelStatus.IN_TRANSIT
+
+        ShipmentStateMachine.transition(
+            db=db,
+            current_user=current_user,
+            parcel=parcel,
+            to_status=new_status,
+            remarks=f"Assigned for {data.assignment_type.value}. Delivery agent: {employee.full_name} ({employee.phone or 'N/A'})",
             location_name=f"Assigned to {employee.full_name}",
-            remarks=f"Assigned for {data.assignment_type.value}. Delivery agent: {employee.full_name} ({employee.phone or 'N/A'})"
+            branch_id=employee.branch_id,
+            source="ASSIGNMENT"
         )
-        db.add(tracking_event)
         db.commit()
         db.refresh(assignment)
         return assignment
@@ -162,17 +164,17 @@ class AssignmentService:
                 assignment.vehicle.status = VehicleStatus.AVAILABLE
 
         if req.status == AssignmentStatus.COMPLETED:
-            if assignment.assignment_type == AssignmentType.LAST_MILE:
-                assignment.parcel.delivery_status = ParcelStatus.DELIVERED
-                assignment.parcel.actual_delivery_date = now
-                th = TrackingHistory(
-                    parcel_id=assignment.parcel_id,
-                    status=ParcelStatus.DELIVERED,
-                    employee_id=current_user.id,
+            if assignment.assignment_type == AssignmentType.LAST_MILE and assignment.parcel.delivery_status != ParcelStatus.DELIVERED:
+                ShipmentStateMachine.transition(
+                    db=db,
+                    current_user=current_user,
+                    parcel=assignment.parcel,
+                    to_status=ParcelStatus.DELIVERED,
+                    remarks="Delivered successfully. Proof of Delivery confirmed.",
                     location_name=f"Delivered to {assignment.parcel.receiver_name}",
-                    remarks="Delivered successfully. Proof of Delivery confirmed."
+                    branch_id=current_user.branch_id,
+                    source="ASSIGNMENT"
                 )
-                db.add(th)
 
         db.commit()
         db.refresh(assignment)

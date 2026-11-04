@@ -11,7 +11,8 @@ from app.models.tracking import TrackingHistory
 from app.models.enums import ParcelStatus, UserRole, PaymentStatus
 from app.schemas.parcel import ParcelCreate, ParcelUpdate, ParcelCancelRequest
 from app.services.pricing_service import PricingEngine
-from app.utils.qr_generator import generate_qr_base64
+from app.services.state_machine import ShipmentStateMachine
+from app.utils.qr_security import generate_secure_qr_code
 from app.utils.pdf_label import generate_shipping_label_pdf
 
 
@@ -52,7 +53,7 @@ class ParcelService:
         )
 
         tracking_number = ParcelService.generate_tracking_number(db)
-        qr_code_data = generate_qr_base64(tracking_number)
+        _, qr_code_data = generate_secure_qr_code(tracking_number)
 
         now = datetime.now(timezone.utc)
         expected_delivery = now + timedelta(days=quote.estimated_delivery_days)
@@ -103,8 +104,11 @@ class ParcelService:
         # Add initial tracking history record
         tracking_event = TrackingHistory(
             parcel_id=parcel.id,
+            from_status=None,
             status=ParcelStatus.BOOKED,
+            source="BOOKING",
             branch_id=origin_branch.id,
+            employee_id=current_user.id if current_user.role != UserRole.CUSTOMER else None,
             location_name=f"{origin_branch.branch_name}, {origin_branch.city}",
             latitude=origin_branch.latitude,
             longitude=origin_branch.longitude,
@@ -183,28 +187,15 @@ class ParcelService:
     def cancel_parcel(db: Session, current_user: User, tracking_number: str, req: ParcelCancelRequest) -> Parcel:
         parcel = ParcelService.get_parcel_by_tracking(db, tracking_number, current_user=current_user)
 
-        if parcel.delivery_status != ParcelStatus.BOOKED:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot cancel parcel in '{parcel.delivery_status.value}' state. Only 'BOOKED' parcels can be cancelled."
-            )
-
-        parcel.delivery_status = ParcelStatus.CANCELLED
-        parcel.cancellation_reason = req.cancellation_reason
-        parcel.payment_status = PaymentStatus.REFUNDED
-
-        # Record tracking history
-        tracking_event = TrackingHistory(
-            parcel_id=parcel.id,
-            status=ParcelStatus.CANCELLED,
-            employee_id=current_user.id if current_user.role != UserRole.CUSTOMER else None,
-            location_name=parcel.current_location,
-            remarks=f"Booking cancelled: {req.cancellation_reason}"
+        return ShipmentStateMachine.transition(
+            db=db,
+            current_user=current_user,
+            parcel=parcel,
+            to_status=ParcelStatus.CANCELLED,
+            remarks=f"Booking cancelled: {req.cancellation_reason}",
+            cancellation_reason=req.cancellation_reason,
+            source="API"
         )
-        db.add(tracking_event)
-        db.commit()
-        db.refresh(parcel)
-        return parcel
 
     @staticmethod
     def get_shipping_label_pdf(db: Session, tracking_number: str, current_user: Optional[User] = None) -> bytes:

@@ -10,7 +10,9 @@ class TrackingHistory(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     parcel_id = Column(Integer, ForeignKey("parcels.id", ondelete="CASCADE"), nullable=False, index=True)
+    from_status = Column(SQLEnum(ParcelStatus), nullable=True)
     status = Column(SQLEnum(ParcelStatus), nullable=False)
+    source = Column(String(50), default="API", nullable=False)
     branch_id = Column(Integer, ForeignKey("branches.id", ondelete="SET NULL"), nullable=True)
     employee_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     location_name = Column(String(255), nullable=True)
