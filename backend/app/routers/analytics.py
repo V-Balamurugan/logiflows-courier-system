@@ -8,7 +8,7 @@ from app.database.session import get_db
 from app.schemas.analytics import DashboardStatsResponse
 from app.models.user import User
 from app.models.parcel import Parcel
-from app.models.enums import ParcelStatus
+from app.models.enums import ParcelStatus, UserRole
 from app.services.analytics_service import AnalyticsService
 from app.dependencies.auth_deps import get_current_user, require_staff
 
@@ -31,8 +31,21 @@ def export_parcels_csv(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_staff)
 ):
-    """Generates and downloads a CSV export of parcel records."""
+    """Generates and downloads a CSV export of parcel records (tenant-scoped)."""
     query = db.query(Parcel)
+
+    if current_user.role != UserRole.SUPER_ADMIN and current_user.organization_id:
+        org_branch_ids = [b.id for b in current_user.organization.branches] if current_user.organization else []
+        query = query.filter(
+            (Parcel.origin_branch_id.in_(org_branch_ids)) |
+            (Parcel.dest_branch_id.in_(org_branch_ids))
+        )
+    elif current_user.role == UserRole.BRANCH_MANAGER and current_user.branch_id:
+        query = query.filter(
+            (Parcel.origin_branch_id == current_user.branch_id) |
+            (Parcel.dest_branch_id == current_user.branch_id)
+        )
+
     if status:
         query = query.filter(Parcel.delivery_status == status)
     if branch_id:

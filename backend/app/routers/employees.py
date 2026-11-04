@@ -63,6 +63,6 @@ def get_employee_workload(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_branch_manager_or_higher)
 ):
-    """Retrieves delivery assignments and workload counters for an employee."""
-    return EmployeeService.get_employee_workload(db, employee_id)
+    """Retrieves delivery assignments and workload counters for an employee (tenant-scoped)."""
+    return EmployeeService.get_employee_workload(db, current_user, employee_id)
 

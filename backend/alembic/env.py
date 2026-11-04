@@ -19,6 +19,9 @@ target_metadata = Base.metadata
 
 
 def get_url():
+    url = config.get_main_option("sqlalchemy.url")
+    if url and not url.startswith("driver://"):
+        return url
     return settings.DATABASE_URL
 
 

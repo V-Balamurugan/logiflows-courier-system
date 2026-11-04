@@ -19,6 +19,7 @@ from app.models.parcel import Parcel
 from app.models.assignment import DeliveryAssignment
 from app.models.tracking import TrackingHistory
 from app.models.custody import CustodyScan
+from app.models.revoked_token import RevokedToken
 
 __all__ = [
     "Base",
@@ -41,5 +42,6 @@ __all__ = [
     "DeliveryAssignment",
     "TrackingHistory",
     "CustodyScan",
+    "RevokedToken",
 ]
 

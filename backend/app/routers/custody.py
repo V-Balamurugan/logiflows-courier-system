@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
@@ -7,6 +7,7 @@ from app.schemas.custody import CustodyScanRequest, CustodyScanResponse
 from app.models.user import User
 from app.models.custody import CustodyScan
 from app.models.parcel import Parcel
+from app.models.enums import UserRole
 from app.services.custody_service import CustodyService
 from app.dependencies.auth_deps import require_staff
 
@@ -29,10 +30,18 @@ def get_custody_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_staff)
 ):
-    """Retrieves full custody scan audit logs for a parcel."""
+    """Retrieves full custody scan audit logs for a parcel (tenant-scoped)."""
     parcel = db.query(Parcel).filter(Parcel.tracking_number == tracking_number).first()
     if not parcel:
-        return []
+        raise HTTPException(status_code=404, detail="Parcel not found")
+
+    if current_user.role != UserRole.SUPER_ADMIN:
+        if not current_user.organization_id:
+            raise HTTPException(status_code=404, detail="Parcel not found")
+        origin_org = parcel.origin_branch.organization_id if parcel.origin_branch else None
+        dest_org = parcel.dest_branch.organization_id if parcel.dest_branch else None
+        if origin_org != current_user.organization_id and dest_org != current_user.organization_id:
+            raise HTTPException(status_code=404, detail="Parcel not found")
     
     scans = db.query(CustodyScan).filter(CustodyScan.parcel_id == parcel.id).order_by(CustodyScan.created_at.desc()).all()
     return [

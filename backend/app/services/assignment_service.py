@@ -10,6 +10,7 @@ from app.models.vehicle import Vehicle
 from app.models.tracking import TrackingHistory
 from app.models.enums import AssignmentStatus, AssignmentType, ParcelStatus, VehicleStatus, UserRole
 from app.schemas.assignment import AssignmentCreate, AssignmentStatusUpdate, AssignmentResponse
+from app.services.state_machine import ShipmentStateMachine
 
 
 class AssignmentService:
@@ -18,6 +19,13 @@ class AssignmentService:
         parcel = db.query(Parcel).filter(Parcel.id == data.parcel_id).first()
         if not parcel:
             raise HTTPException(status_code=404, detail="Parcel not found")
+
+        # Tenant scoping for parcel
+        if current_user.role != UserRole.SUPER_ADMIN:
+            origin_org = parcel.origin_branch.organization_id if parcel.origin_branch else None
+            dest_org = parcel.dest_branch.organization_id if parcel.dest_branch else None
+            if origin_org != current_user.organization_id and dest_org != current_user.organization_id:
+                raise HTTPException(status_code=404, detail="Parcel not found")
 
         # Check existing active assignment for this parcel
         active_existing = db.query(DeliveryAssignment).filter(
@@ -34,11 +42,16 @@ class AssignmentService:
         if not employee or employee.role not in [UserRole.DELIVERY_AGENT, UserRole.BRANCH_MANAGER]:
             raise HTTPException(status_code=400, detail="Invalid delivery employee")
 
+        if current_user.role != UserRole.SUPER_ADMIN and employee.organization_id != current_user.organization_id:
+            raise HTTPException(status_code=404, detail="Delivery employee not found")
+
         vehicle = None
         if data.vehicle_id:
             vehicle = db.query(Vehicle).filter(Vehicle.id == data.vehicle_id, Vehicle.is_active == True).first()
             if not vehicle:
                 raise HTTPException(status_code=400, detail="Vehicle not found or inactive")
+            if current_user.role != UserRole.SUPER_ADMIN and vehicle.organization_id != current_user.organization_id:
+                raise HTTPException(status_code=404, detail="Vehicle not found")
 
         assignment = DeliveryAssignment(
             parcel_id=data.parcel_id,
@@ -50,25 +63,26 @@ class AssignmentService:
             assigned_at=datetime.now(timezone.utc)
         )
         db.add(assignment)
+        db.flush()
 
-        # Update parcel status according to assignment type
-        new_status = ParcelStatus.OUT_FOR_DELIVERY if data.assignment_type == AssignmentType.LAST_MILE else ParcelStatus.PICKUP_SCHEDULED
-        if data.assignment_type == AssignmentType.TRANSFER:
-            new_status = ParcelStatus.IN_TRANSIT
-            
-        parcel.delivery_status = new_status
         if vehicle:
             vehicle.status = VehicleStatus.ASSIGNED
 
-        # Record tracking history
-        tracking_event = TrackingHistory(
-            parcel_id=parcel.id,
-            status=new_status,
-            employee_id=employee.id,
+        # Update parcel status according to assignment type via State Machine
+        new_status = ParcelStatus.OUT_FOR_DELIVERY if data.assignment_type == AssignmentType.LAST_MILE else ParcelStatus.PICKUP_SCHEDULED
+        if data.assignment_type == AssignmentType.TRANSFER:
+            new_status = ParcelStatus.IN_TRANSIT
+
+        ShipmentStateMachine.transition(
+            db=db,
+            current_user=current_user,
+            parcel=parcel,
+            to_status=new_status,
+            remarks=f"Assigned for {data.assignment_type.value}. Delivery agent: {employee.full_name} ({employee.phone or 'N/A'})",
             location_name=f"Assigned to {employee.full_name}",
-            remarks=f"Assigned for {data.assignment_type.value}. Delivery agent: {employee.full_name} ({employee.phone or 'N/A'})"
+            branch_id=employee.branch_id,
+            source="ASSIGNMENT"
         )
-        db.add(tracking_event)
         db.commit()
         db.refresh(assignment)
         return assignment
@@ -81,6 +95,11 @@ class AssignmentService:
         status: Optional[AssignmentStatus] = None
     ) -> List[AssignmentResponse]:
         query = db.query(DeliveryAssignment)
+
+        if current_user.role != UserRole.SUPER_ADMIN and current_user.organization_id:
+            query = query.join(User, DeliveryAssignment.employee_id == User.id).filter(
+                User.organization_id == current_user.organization_id
+            )
 
         if current_user.role == UserRole.DELIVERY_AGENT:
             query = query.filter(DeliveryAssignment.employee_id == current_user.id)
@@ -123,8 +142,16 @@ class AssignmentService:
         if not assignment:
             raise HTTPException(status_code=404, detail="Assignment not found")
 
+        # Check tenant isolation
+        if current_user.role != UserRole.SUPER_ADMIN:
+            if not current_user.organization_id:
+                raise HTTPException(status_code=404, detail="Assignment not found")
+            emp_org = assignment.employee.organization_id if assignment.employee else None
+            if emp_org != current_user.organization_id:
+                raise HTTPException(status_code=404, detail="Assignment not found")
+
         if current_user.role == UserRole.DELIVERY_AGENT and assignment.employee_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Cannot modify assignments for other agents")
+            raise HTTPException(status_code=404, detail="Assignment not found")
 
         assignment.status = req.status
         if req.notes:
@@ -137,17 +164,17 @@ class AssignmentService:
                 assignment.vehicle.status = VehicleStatus.AVAILABLE
 
         if req.status == AssignmentStatus.COMPLETED:
-            if assignment.assignment_type == AssignmentType.LAST_MILE:
-                assignment.parcel.delivery_status = ParcelStatus.DELIVERED
-                assignment.parcel.actual_delivery_date = now
-                th = TrackingHistory(
-                    parcel_id=assignment.parcel_id,
-                    status=ParcelStatus.DELIVERED,
-                    employee_id=current_user.id,
+            if assignment.assignment_type == AssignmentType.LAST_MILE and assignment.parcel.delivery_status != ParcelStatus.DELIVERED:
+                ShipmentStateMachine.transition(
+                    db=db,
+                    current_user=current_user,
+                    parcel=assignment.parcel,
+                    to_status=ParcelStatus.DELIVERED,
+                    remarks="Delivered successfully. Proof of Delivery confirmed.",
                     location_name=f"Delivered to {assignment.parcel.receiver_name}",
-                    remarks="Delivered successfully. Proof of Delivery confirmed."
+                    branch_id=current_user.branch_id,
+                    source="ASSIGNMENT"
                 )
-                db.add(th)
 
         db.commit()
         db.refresh(assignment)

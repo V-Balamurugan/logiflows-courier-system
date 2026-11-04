@@ -50,6 +50,7 @@ class Parcel(Base):
 
     # Current Status & Tracking
     delivery_status = Column(SQLEnum(ParcelStatus), default=ParcelStatus.BOOKED, nullable=False, index=True)
+    version_id = Column(Integer, default=1, nullable=False)
     current_location = Column(String(255), nullable=True)
     qr_code_data = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)

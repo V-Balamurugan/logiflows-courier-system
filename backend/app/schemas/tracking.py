@@ -6,6 +6,7 @@ from app.models.enums import ParcelStatus
 
 class TrackingUpdateRequest(BaseModel):
     status: ParcelStatus
+    expected_version: Optional[int] = None
     branch_id: Optional[int] = None
     location_name: Optional[str] = None
     latitude: Optional[float] = None

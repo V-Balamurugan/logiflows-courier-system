@@ -39,8 +39,8 @@ def get_vehicle(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_staff)
 ):
-    """Retrieves specific vehicle record."""
-    return VehicleService.get_vehicle(db, vehicle_id)
+    """Retrieves specific vehicle record with tenant isolation."""
+    return VehicleService.get_vehicle(db, vehicle_id, current_user=current_user)
 
 
 @router.put("/{vehicle_id}", response_model=VehicleResponse)
@@ -50,6 +50,6 @@ def update_vehicle(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_branch_manager_or_higher)
 ):
-    """Updates vehicle status or maintenance state."""
-    return VehicleService.update_vehicle(db, vehicle_id, data)
+    """Updates vehicle status or maintenance state within tenant scope."""
+    return VehicleService.update_vehicle(db, vehicle_id, data, current_user=current_user)
 
