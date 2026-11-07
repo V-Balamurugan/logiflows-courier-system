@@ -102,3 +102,14 @@
 - [x] **AC4: Composite Index for Tracking History:** Composite index `ix_tracking_history_parcel_created_id` on `tracking_history(parcel_id, created_at, id)` created via reversible Alembic migration `e5f6a7b8c9d0`.
 - [x] **AC5: Strict Public Tracking Data Sanitization (Zero PII):** Public tracking endpoint `GET /api/v1/tracking/public/{tracking_number}` exposes strictly operational milestones, transit cities, and coarse checkpoints. Customer phones, street addresses, receiver phones, and internal employee IDs are 100% redacted. Non-existent tracking numbers return uniform HTTP 404 without enumeration leakage.
 - [x] **AC6: Authorized Detailed Tracking with Tenant Isolation:** Endpoint `GET /api/v1/tracking/{tracking_number}` verifies authorization: only the booking customer, Super Admin, or staff within the operating organization can access full sender/receiver records. Unauthorized or cross-tenant users receive HTTP 404.
+
+
+---
+
+## 9. Sub-Phase 11.6 Acceptance Criteria Verification
+
+- [x] **AC1: Role-to-Page Routing Guards:** Explicit role-guarded route trees in `AppRoutes.tsx` using `ProtectedRoute allowedRoles={[...]}`. Customers blocked from management routes (`/branches`, `/employees`, `/customers`, `/vehicles`, `/reports`) and delivery operations (`/assignments`, `/qr-scanner`). Unprivileged route navigation gracefully redirects to `/dashboard`.
+- [x] **AC2: Thread-Safe Concurrent Token Refresh Queue:** Axios response interceptor in `api/client.ts` implements a promise-based retry queue (`failedQueue`) and single-flight lock (`isRefreshing`). Concurrent 401s share a single `/auth/refresh` roundtrip, avoiding refresh token race invalidation and accidental logouts.
+- [x] **AC3: Leaflet GPS Coordinate Safe Degradation:** `LeafletMap` validates coordinate finiteness and valid degree ranges (lat: [-90, +90], lng: [-180, +180]). Missing, null, or out-of-range coordinates render an informative placeholder banner without throwing unhandled DOM exceptions or blank map errors.
+- [x] **AC4: Client-Side Input & Organization Validation:** Consignment booking form enforces address length (>= 5 chars), weight (0.01 - 1000 kg), and dimensions (1 - 500 cm) before dispatch. Destination hub select dropdown is dynamically constrained to hubs within the selected origin organization.
+- [x] **AC5: Frontend Test Suite & Clean Build:** Component & routing unit tests in `src/tests/RoutesAndLeaflet.test.tsx` verify graceful map degradation and role-based route redirects (8/8 vitest tests pass; production vite build succeeds).
