@@ -70,6 +70,7 @@ class AssignmentStatus(str, Enum):
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
     CANCELLED = "CANCELLED"
+    FAILED = "FAILED"
 
 
 class ScanType(str, Enum):

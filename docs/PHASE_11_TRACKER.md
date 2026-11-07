@@ -78,3 +78,15 @@
 - [x] **AC4: Verified Payment State Machine:** Shipments initialize with `PaymentStatus.PENDING`. Payments verified via `POST /api/v1/parcels/{tracking_number}/payment` with amount validation and audit metadata; illegal transitions rejected.
 - [x] **AC5: Shipment Cancellation Protections:** Cancelling shipped (`IN_TRANSIT`) or `DELIVERED` parcels fails with 400; unauthorized user/cross-customer cancellation fails with 404 anti-leakage.
 - [x] **AC6: Decimal Precision Pricing Engine:** Exact calculations for all service types (`STANDARD`, `EXPRESS`, `OVERNIGHT`, `SAME_DAY`), volumetric divisor (5000), 18% GST tax, and rounding verified via fixed test benchmarks.
+
+
+---
+
+## 7. Sub-Phase 11.4 Acceptance Criteria Verification
+
+- [x] **AC1: Concurrent & Active Parcel Assignment Double-Booking Prevention:** Partial unique index `uq_active_parcel_assignment` on `delivery_assignments(parcel_id)` for `status IN ('ASSIGNED', 'IN_PROGRESS')`. Attempting to assign an already actively assigned parcel is rejected with HTTP 409 Conflict.
+- [x] **AC2: Vehicle Double-Booking & Status Control:** Vehicles must be in `AVAILABLE` status with 0 active assignments to be assigned. Attempting to assign an already-assigned vehicle returns HTTP 409 Conflict.
+- [x] **AC3: Vehicle Payload Capacity Validation:** Decimal validation confirms `parcel.weight_kg <= vehicle.max_weight_kg` and volumetric parcel cube <= vehicle volumetric limit. Overcapacity assignments rejected with HTTP 400 Bad Request.
+- [x] **AC4: Delivery Agent Workload Capping:** Maximum concurrent active assignments for an agent capped at 10. Exceeding workload returns HTTP 409 Conflict.
+- [x] **AC5: Atomic State Synchronization:** Creating an assignment atomically transitions vehicle status to `ASSIGNED` and parcel status via `ShipmentStateMachine`. Completing/failing an assignment atomically updates assignment, releases vehicle to `AVAILABLE`, and advances parcel state to `DELIVERED` / `DELIVERY_FAILED`.
+- [x] **AC6: Tenant & Role Authorization:** Only `SUPER_ADMIN`, `ORG_ADMIN`, and branch-scoped `BRANCH_MANAGER` can assign deliveries. Delivery agents or customers attempting assignments receive HTTP 403 Forbidden. Cross-tenant assignments return HTTP 404 Not Found. Mid-transaction failures rollback cleanly.

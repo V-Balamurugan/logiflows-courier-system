@@ -4,8 +4,8 @@ from app.core.config import settings
 def test_public_tracking_and_qr_custody(client, customer_headers, branchmanager_headers, agent_headers):
     # 1. Book a parcel as customer
     branches = client.get(f"{settings.API_V1_STR}/branches", headers=customer_headers).json()
-    b_origin = branches[0]["id"]
-    b_dest = branches[1]["id"]
+    b_origin = next(b["id"] for b in branches if "Mumbai" in b["branch_name"] or "Mumbai" in b["city"])
+    b_dest = next(b["id"] for b in branches if "Delhi" in b["branch_name"] or "Delhi" in b["city"])
 
     booking_payload = {
         "origin_branch_id": b_origin,

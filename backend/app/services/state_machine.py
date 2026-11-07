@@ -117,6 +117,10 @@ TRANSITION_TABLE: Dict[Tuple[ParcelStatus, ParcelStatus], TransitionRule] = {
         allowed_roles={UserRole.DELIVERY_AGENT, UserRole.BRANCH_MANAGER, UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN},
         description="Proof of delivery confirmed; successfully delivered."
     ),
+    (ParcelStatus.OUT_FOR_DELIVERY, ParcelStatus.AT_DESTINATION_BRANCH): TransitionRule(
+        allowed_roles={UserRole.DELIVERY_AGENT, UserRole.BRANCH_MANAGER, UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN},
+        description="Delivery run cancelled or returned to destination hub."
+    ),
     (ParcelStatus.OUT_FOR_DELIVERY, ParcelStatus.DELIVERY_FAILED): TransitionRule(
         allowed_roles={UserRole.DELIVERY_AGENT, UserRole.BRANCH_MANAGER, UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN},
         description="Delivery attempt failed (consignee unavailable / wrong address)."
