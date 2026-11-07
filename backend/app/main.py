@@ -1,10 +1,13 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+from sqlalchemy import text
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
-from app.database.session import engine, Base, SessionLocal
+from app.database.session import engine, Base, SessionLocal, get_db
 from app.database.init_db import init_db
+from app.middleware.rate_limit import RateLimitMiddleware
 from app.routers import (
     auth,
     organizations,
@@ -43,6 +46,9 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+# Rate Limiting Middleware
+app.add_middleware(RateLimitMiddleware, max_requests=20, window_seconds=60)
+
 # CORS Middleware
 app.add_middleware(
     CORSMiddleware,
@@ -67,7 +73,7 @@ app.include_router(analytics.router, prefix=settings.API_V1_STR)
 
 
 @app.get("/", tags=["Health"])
-def health_check():
+def root_status():
     return {
         "status": "online",
         "service": settings.PROJECT_NAME,
@@ -75,3 +81,20 @@ def health_check():
         "docs_url": "/docs"
     }
 
+
+@app.get("/health", tags=["Health"])
+def health_check(response: Response, db: Session = Depends(get_db)):
+    """Active deep health check validating database connectivity."""
+    db_status = "connected"
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as e:
+        db_status = f"unhealthy: {str(e)}"
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
+    return {
+        "status": "healthy" if db_status == "connected" else "degraded",
+        "service": settings.PROJECT_NAME,
+        "database": db_status,
+        "environment": settings.ENVIRONMENT
+    }

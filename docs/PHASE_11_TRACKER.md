@@ -124,3 +124,14 @@
 - [x] **AC3: Type Check & Production Build:** Frontend passes strict TypeScript compilation (`tsc -b`) and production asset bundling (`vite build`) without failures.
 - [x] **AC4: Requirements Traceability Matrix:** Authored `docs/TRACEABILITY_MATRIX.md` mapping all functional and non-functional criteria to specific test files, function names, and verification status.
 - [x] **AC5: GitHub Actions CI Pipeline:** Created `.github/workflows/ci.yml` with dual parallel jobs: `backend-ci` (Python 3.12, dependency caching, alembic migrations check, and full pytest suite) and `frontend-ci` (Node 20, oxlint linting, TypeScript checking, Vitest suite, and production Vite build).
+
+
+---
+
+## 11. Sub-Phase 11.8 Acceptance Criteria Verification
+
+- [x] **AC1: Hardened Dockerfiles with Non-Root Execution:** `backend/Dockerfile` runs under an unprivileged, dedicated non-root user (`appuser`, UID 1000) on pinned `python:3.12-slim`. `frontend/Dockerfile` uses multi-stage caching with `node:20-alpine` and `nginx:1.27-alpine` with healthcheck.
+- [x] **AC2: Comprehensive Dockerignore Exclusions:** Added `.dockerignore` files at repository root, `backend/`, and `frontend/` excluding virtual environments, node modules, build artifacts, test caches, local SQLite databases, and environment secrets.
+- [x] **AC3: Network Isolation & Database Port Hardening:** `docker-compose.yml` configures dual isolated networks: `internal-net` (internal, unbridged database and backend communication) and `public-net`. Host port publication `5432:5432` removed from `postgres` in favor of internal `expose: ["5432"]`.
+- [x] **AC4: Deep Health Check Endpoint:** `GET /health` added to backend executing active `SELECT 1` ping against database and returning operational connectivity telemetry.
+- [x] **AC5: Sensitive Auth Endpoint Rate Limiting:** Implemented `RateLimitMiddleware` sliding-window throttling on `POST /api/v1/auth/login` and `POST /api/v1/auth/register` (max 20 req/min per IP with HTTP 429 response and `Retry-After` header).

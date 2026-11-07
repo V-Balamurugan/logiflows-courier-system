@@ -9,10 +9,12 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-logiflows_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-logiflows_pass}
       POSTGRES_DB: ${POSTGRES_DB:-logiflows_db}
-    ports:
-      - "5432:5432"
+    expose:
+      - "5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - internal-net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-logiflows_user} -d ${POSTGRES_DB:-logiflows_db}"]
       interval: 10s
@@ -34,13 +36,18 @@ services:
       - CORS_ORIGINS=["http://localhost:5173","http://localhost:3000","http://127.0.0.1:5173","http://localhost"]
       - FIRST_SUPERADMIN_EMAIL=${FIRST_SUPERADMIN_EMAIL:-superadmin@logiflows.com}
       - FIRST_SUPERADMIN_PASSWORD=${FIRST_SUPERADMIN_PASSWORD:-SuperAdmin@LogiFlows2026!}
+    expose:
+      - "8000"
     ports:
       - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - internal-net
+      - public-net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -57,6 +64,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    networks:
+      - public-net
 
   n8n:
     image: docker.n8n.io/n8nio/n8n:latest
@@ -70,8 +79,16 @@ services:
       - N8N_BASIC_AUTH_PASSWORD=AdminPassword2026!
     volumes:
       - n8n_data:/home/node/.n8n
+    networks:
+      - public-net
 
 volumes:
   pgdata:
   n8n_data:
 
+networks:
+  internal-net:
+    driver: bridge
+    internal: true
+  public-net:
+    driver: bridge
