@@ -113,3 +113,14 @@
 - [x] **AC3: Leaflet GPS Coordinate Safe Degradation:** `LeafletMap` validates coordinate finiteness and valid degree ranges (lat: [-90, +90], lng: [-180, +180]). Missing, null, or out-of-range coordinates render an informative placeholder banner without throwing unhandled DOM exceptions or blank map errors.
 - [x] **AC4: Client-Side Input & Organization Validation:** Consignment booking form enforces address length (>= 5 chars), weight (0.01 - 1000 kg), and dimensions (1 - 500 cm) before dispatch. Destination hub select dropdown is dynamically constrained to hubs within the selected origin organization.
 - [x] **AC5: Frontend Test Suite & Clean Build:** Component & routing unit tests in `src/tests/RoutesAndLeaflet.test.tsx` verify graceful map degradation and role-based route redirects (8/8 vitest tests pass; production vite build succeeds).
+
+
+---
+
+## 10. Sub-Phase 11.7 Acceptance Criteria Verification
+
+- [x] **AC1: 100% Backend Test Pass Rate:** 68/68 automated tests in `backend/app/tests/` passed cleanly (100% success rate across all 15 test files).
+- [x] **AC2: 100% Frontend Test Pass Rate:** 8/8 Vitest tests passed cleanly across badge formatting, Leaflet GPS fallback, and RBAC route protections.
+- [x] **AC3: Type Check & Production Build:** Frontend passes strict TypeScript compilation (`tsc -b`) and production asset bundling (`vite build`) without failures.
+- [x] **AC4: Requirements Traceability Matrix:** Authored `docs/TRACEABILITY_MATRIX.md` mapping all functional and non-functional criteria to specific test files, function names, and verification status.
+- [x] **AC5: GitHub Actions CI Pipeline:** Created `.github/workflows/ci.yml` with dual parallel jobs: `backend-ci` (Python 3.12, dependency caching, alembic migrations check, and full pytest suite) and `frontend-ci` (Node 20, oxlint linting, TypeScript checking, Vitest suite, and production Vite build).
