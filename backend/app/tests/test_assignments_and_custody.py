@@ -63,7 +63,7 @@ def test_public_tracking_and_qr_custody(client, customer_headers, branchmanager_
         "notes": "Deliver by 5 PM"
     }
     assign_resp = client.post(f"{settings.API_V1_STR}/assignments", json=assign_payload, headers=branchmanager_headers)
-    assert assign_resp.status_code == 201
+    assert assign_resp.status_code == 201, assign_resp.text
     assignment_id = assign_resp.json()["id"]
 
     # 5. Agent marks assignment completed

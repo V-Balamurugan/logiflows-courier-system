@@ -57,19 +57,6 @@ class CustodyService:
         # 2. Lookup Parcel
         parcel = db.query(Parcel).filter(Parcel.tracking_number == tracking_number).first()
         if not parcel:
-            scan_failed = CustodyScan(
-                parcel_id=None,
-                scanned_by_id=current_user.id,
-                branch_id=branch_id,
-                scan_type=req.scan_type,
-                is_successful=False,
-                failure_reason="Parcel not found",
-                latitude=req.latitude,
-                longitude=req.longitude,
-                notes=req.notes
-            )
-            db.add(scan_failed)
-            db.commit()
             raise HTTPException(status_code=404, detail="Parcel not found")
 
         # 3. Tenant Isolation

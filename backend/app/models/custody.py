@@ -9,7 +9,7 @@ class CustodyScan(Base):
     __tablename__ = "custody_scans"
 
     id = Column(Integer, primary_key=True, index=True)
-    parcel_id = Column(Integer, ForeignKey("parcels.id", ondelete="CASCADE"), nullable=True, index=True)
+    parcel_id = Column(Integer, ForeignKey("parcels.id", ondelete="CASCADE"), nullable=False, index=True)
     scanned_by_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
     branch_id = Column(Integer, ForeignKey("branches.id", ondelete="SET NULL"), nullable=True)
     scan_type = Column(SQLEnum(ScanType), nullable=False)

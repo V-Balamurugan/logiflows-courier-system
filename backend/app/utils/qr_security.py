@@ -90,3 +90,4 @@ def generate_secure_qr_code(tracking_number: str) -> Tuple[str, str]:
     payload = generate_secure_qr_payload(tracking_number)
     qr_data_uri = generate_qr_base64(payload)
     return payload, qr_data_uri
+

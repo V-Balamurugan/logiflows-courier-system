@@ -46,7 +46,10 @@ class Parcel(Base):
     service_charge = Column(Float, default=0.0, nullable=False)
     tax_amount = Column(Float, default=0.0, nullable=False)
     total_charge = Column(Float, nullable=False)
-    payment_status = Column(SQLEnum(PaymentStatus), default=PaymentStatus.PAID, nullable=False)
+    payment_status = Column(SQLEnum(PaymentStatus), default=PaymentStatus.PENDING, nullable=False)
+    payment_method = Column(String(50), nullable=True)
+    transaction_reference = Column(String(100), nullable=True)
+    paid_at = Column(DateTime, nullable=True)
 
     # Current Status & Tracking
     delivery_status = Column(SQLEnum(ParcelStatus), default=ParcelStatus.BOOKED, nullable=False, index=True)

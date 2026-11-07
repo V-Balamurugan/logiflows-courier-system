@@ -20,10 +20,8 @@ stateDiagram-v2
     PICKUP_SCHEDULED --> BOOKED: Pickup Rescheduled
 
     PICKED_UP --> AT_ORIGIN_BRANCH: Origin Inward QR Scan
-    PICKED_UP --> OUT_FOR_DELIVERY: Local Direct Delivery Dispatched
 
     AT_ORIGIN_BRANCH --> IN_TRANSIT: Hub Outward Scan
-    AT_ORIGIN_BRANCH --> OUT_FOR_DELIVERY: Intra-city Last-Mile Dispatched
     AT_ORIGIN_BRANCH --> ON_HOLD: Admin / Inspection Hold
 
     IN_TRANSIT --> AT_DESTINATION_BRANCH: Dest Inward QR Scan
@@ -65,9 +63,7 @@ stateDiagram-v2
 | `PICKUP_SCHEDULED` | `CANCELLED` | Customer (owner), Branch Manager, Org Admin, Super Admin | Same as BOOKED cancellation. | Sets `payment_status = REFUNDED`. | **Yes** |
 | `PICKUP_SCHEDULED` | `BOOKED` | Branch Manager, Org Admin, Super Admin | Pickup attempt deferred. | Resets assignment, appends tracking event. | No |
 | `PICKED_UP` | `AT_ORIGIN_BRANCH` | Delivery Agent, Branch Manager, Org Admin, Super Admin | Arrival at origin hub. | Updates `current_location`, appends tracking event. | No |
-| `PICKED_UP` | `OUT_FOR_DELIVERY` | Delivery Agent, Branch Manager, Org Admin, Super Admin | **Requires active DeliveryAssignment**. Direct local dispatch after pickup. | Updates `current_location`, appends tracking event. | No |
 | `AT_ORIGIN_BRANCH` | `IN_TRANSIT` | Branch Manager, Org Admin, Super Admin | Vehicle/manifest prepared. | Updates `current_location`, appends tracking event. | No |
-| `AT_ORIGIN_BRANCH` | `OUT_FOR_DELIVERY` | Branch Manager, Org Admin, Super Admin | **Requires active DeliveryAssignment**. Local intra-city dispatch from origin hub. | Updates `current_location`, appends tracking event. | No |
 | `AT_ORIGIN_BRANCH` | `ON_HOLD` | Branch Manager, Org Admin, Super Admin | Customs or documentation hold. | Records remarks, appends tracking event. | No |
 | `IN_TRANSIT` | `AT_DESTINATION_BRANCH` | Branch Manager, Org Admin, Super Admin | Inward destination scan. | Updates `current_location`, appends tracking event. | No |
 | `IN_TRANSIT` | `AT_ORIGIN_BRANCH` | Branch Manager, Org Admin, Super Admin | Rerouted back to origin hub. | Updates `current_location`, appends tracking event. | No |
@@ -130,3 +126,4 @@ To guarantee that concurrent requests on the same shipment cannot corrupt state:
 2. **Verification & Audit:**
    - Signature tampering, expiration, malformed structure, or cross-tenant access are caught and rejected immediately.
    - All scan attempts (both accepted and rejected) are permanently recorded in `custody_scans` with `is_successful` boolean and `failure_reason` for complete chain-of-custody compliance.
+

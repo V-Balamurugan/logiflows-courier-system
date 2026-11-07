@@ -18,14 +18,18 @@ from app.utils.pdf_label import generate_shipping_label_pdf
 
 class ParcelService:
     @staticmethod
-    def generate_tracking_number(db: Session) -> str:
-        """Generates a guaranteed unique tracking number like LF-2026-384912."""
+    def generate_tracking_number(db: Session, max_retries: int = 5) -> str:
+        """Generates a cryptographically random, collision-checked tracking number like LF-2026-384912."""
         year = datetime.now().year
-        while True:
-            random_part = secrets.randbelow(900000) + 100000  # 6 digit number
+        for _ in range(max_retries):
+            random_part = secrets.randbelow(900000) + 100000  # 6-digit cryptographically strong integer
             tracking_no = f"LF-{year}-{random_part}"
-            if not db.query(Parcel).filter(Parcel.tracking_number == tracking_no).first():
+            if not db.query(Parcel.id).filter(Parcel.tracking_number == tracking_no).first():
                 return tracking_no
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to generate unique tracking number after maximum retry attempts. Please retry."
+        )
 
     @staticmethod
     def create_parcel(db: Session, current_user: User, data: ParcelCreate) -> Parcel:
@@ -38,10 +42,21 @@ class ParcelService:
         if not dest_branch:
             raise HTTPException(status_code=400, detail="Invalid destination branch")
 
+        # AC1: Cross-organization branch check
+        # Origin and destination branches must belong to the same operating organization
+        if origin_branch.organization_id != dest_branch.organization_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Origin and destination branches must belong to the same operating organization"
+            )
+
         # Staff can only create parcels originating from their organization
         if current_user.role not in [UserRole.CUSTOMER, UserRole.SUPER_ADMIN]:
-            if current_user.organization_id and origin_branch.organization_id != current_user.organization_id:
-                raise HTTPException(status_code=400, detail="Origin branch does not belong to your organization")
+            if current_user.organization_id and (
+                origin_branch.organization_id != current_user.organization_id or
+                dest_branch.organization_id != current_user.organization_id
+            ):
+                raise HTTPException(status_code=400, detail="Branches do not belong to your organization")
 
         # Calculate pricing
         quote = PricingEngine.calculate_quote(
@@ -90,7 +105,7 @@ class ParcelService:
             service_charge=quote.service_charge,
             tax_amount=quote.tax_amount,
             total_charge=quote.total_charge,
-            payment_status=PaymentStatus.PAID,
+            payment_status=PaymentStatus.PENDING,
             delivery_status=ParcelStatus.BOOKED,
             current_location=f"{origin_branch.city} Hub",
             qr_code_data=qr_code_data,
@@ -187,7 +202,7 @@ class ParcelService:
     def cancel_parcel(db: Session, current_user: User, tracking_number: str, req: ParcelCancelRequest) -> Parcel:
         parcel = ParcelService.get_parcel_by_tracking(db, tracking_number, current_user=current_user)
 
-        return ShipmentStateMachine.transition(
+        updated_parcel = ShipmentStateMachine.transition(
             db=db,
             current_user=current_user,
             parcel=parcel,
@@ -196,6 +211,16 @@ class ParcelService:
             cancellation_reason=req.cancellation_reason,
             source="API"
         )
+
+        # Update payment status accordingly
+        if updated_parcel.payment_status == PaymentStatus.PAID:
+            updated_parcel.payment_status = PaymentStatus.REFUNDED
+        else:
+            updated_parcel.payment_status = PaymentStatus.CANCELLED
+
+        db.commit()
+        db.refresh(updated_parcel)
+        return updated_parcel
 
     @staticmethod
     def get_shipping_label_pdf(db: Session, tracking_number: str, current_user: Optional[User] = None) -> bytes:

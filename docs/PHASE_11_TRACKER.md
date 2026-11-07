@@ -13,7 +13,7 @@
 | **11.0** | Repository Audit (Read-Only) | **COMPLETE** | 2026-11-04 | Stack audit, 38-endpoint inventory, 13 defects cataloged, 15/15 Pytest passed |
 | **11.1** | Security & Tenant Isolation | **COMPLETE** | 2026-11-04 | Tenant scoping across all services, 404 anti-leakage, JWT revocation store & rotation, fail-fast production config, `docs/PERMISSIONS.md` |
 | **11.2** | State Machine & Concurrency | **COMPLETE** | 2026-11-04 | Centralized `ShipmentStateMachine`, optimistic locking (`version_id`), signed QR custody, atomic tracking events, `docs/SHIPMENT_STATE_MACHINE.md` |
-| **11.3** | Pricing & Quotation Engine | *Pending* | - | Scheduled |
+| **11.3** | Pricing & Quotation Engine | **COMPLETE** | 2026-11-07 | Decimal pricing engine, bounds & NaN validation, bounded collision retry, explicit payment state machine, payment verification endpoint |
 | **11.4** | Assignments & Operations | *Pending* | - | Scheduled |
 | **11.5** | Real-Time Tracking & Maps | *Pending* | - | Scheduled |
 | **11.6** | Frontend Polish & React 19 UI | *Pending* | - | Scheduled |
@@ -59,32 +59,22 @@
 
 ## 4. Sub-Phase 11.2 Acceptance Criteria Verification
 
-- [x] **AC1: Centralized Service:** Every status write in the codebase routes through `ShipmentStateMachine`. Direct status assignments eliminated across all services.
-- [x] **AC2: Transition Matrix:** Parametrized test covers transition matrix: every allowed pair succeeds, disallowed pairs fail with 400. Documented in `docs/SHIPMENT_STATE_MACHINE.md`.
-- [x] **AC3: Concurrency & 409 Conflict:** Optimistic locking via `version_id` integer column produces exactly 1 success (200) and 1 HTTP 409 Conflict on conflicting concurrent update requests.
-- [x] **AC4: Tracking Immutability:** Tracking events cannot be updated or deleted via services/APIs; strictly append-only with `from_status` and `source` audit fields.
-- [x] **AC5: QR Security & Custody Audit:** Cryptographically signed tokens (`LFQR.<tracking_no>.<issued>.<exp>.<nonce>.<sig>`); malformed, tampered, expired, cross-tenant, and invalid scans rejected and logged in `custody_scans` with `is_successful=False`.
+- [x] **AC1: Centralized Service:** Every status write in the codebase routes through `ShipmentStateMachine`. Direct status assignments eliminated.
+- [x] **AC2: Transition Matrix:** Parametrized test covers full from/to matrix: every allowed pair succeeds, disallowed pairs fail with 400.
+- [x] **AC3: Concurrency & 409 Conflict:** Optimistic locking via `version_id` produces exactly 1 success and 1 HTTP 409 Conflict on simultaneous updates.
+- [x] **AC4: Tracking Immutability:** Tracking events cannot be updated or deleted via services/APIs; strictly append-only.
+- [x] **AC5: QR Security & Custody Audit:** Cryptographically signed tokens (`LFQR.*`); malformed, expired, cross-tenant, and invalid scans rejected and logged in `custody_scans`.
 - [x] **AC6: Transaction Atomicity:** State transition and tracking event created atomically in the same database transaction; rollback on failure creates none.
+
+
 
 ---
 
-## 5. Sub-Phase 11.2 Verification Evidence
+## 6. Sub-Phase 11.3 Acceptance Criteria Verification
 
-- **Alembic Migration:** `b2c3d4e5f6a7` applied (`version_id` on `parcels`, `from_status` & `source` on `tracking_history`, `is_successful`, `failure_reason`, and nullable `parcel_id` on `custody_scans`). Tested bidirectional upgrade/downgrade cleanly.
-- **Backend Pytest Suite:** `48 passed, 1 warning in 6.27s` (Executed-Passed).
-  - `test_state_machine.py`: 5 passed
-  - `test_concurrency.py`: 2 passed
-  - `test_qr_custody.py`: 5 passed
-  - `test_tracking_immutability.py`: 4 passed
-  - `test_assignments_and_custody.py`: 1 passed
-  - `test_tenant_isolation.py`: 7 passed
-  - `test_security_jwt.py`: 5 passed
-  - `test_config_failfast.py`: 5 passed
-  - `test_auth.py`: 5 passed
-  - `test_branches.py`: 3 passed
-  - `test_employees.py`: 3 passed
-  - `test_parcels.py`: 3 passed
-- **Frontend Vitest Suite:** `1 passed (3 tests in Badge.test.tsx)` (Executed-Passed).
-- **Frontend Production Build:** `tsc -b && vite build` succeeded in 1.19s without error (Executed-Passed).
-
-
+- [x] **AC1: Cross-Organization Branch Denial:** Origin and Destination branches must belong to the same operating organization; cross-org branch combinations rejected with 400.
+- [x] **AC2: Numeric, Range & NaN Validation:** `weight_kg` (0.01 - 1000.0 kg), dimensions (1.0 - 500.0 cm); negative, zero, oversized, NaN, and Inf values rejected with 422 field-level errors.
+- [x] **AC3: Bounded Unique Tracking Number Generation:** Cryptographically random generation (`secrets.randbelow`) with database uniqueness check and bounded retry loop (`max_retries=5`); collision retry verified via unit test.
+- [x] **AC4: Verified Payment State Machine:** Shipments initialize with `PaymentStatus.PENDING`. Payments verified via `POST /api/v1/parcels/{tracking_number}/payment` with amount validation and audit metadata; illegal transitions rejected.
+- [x] **AC5: Shipment Cancellation Protections:** Cancelling shipped (`IN_TRANSIT`) or `DELIVERED` parcels fails with 400; unauthorized user/cross-customer cancellation fails with 404 anti-leakage.
+- [x] **AC6: Decimal Precision Pricing Engine:** Exact calculations for all service types (`STANDARD`, `EXPRESS`, `OVERNIGHT`, `SAME_DAY`), volumetric divisor (5000), 18% GST tax, and rounding verified via fixed test benchmarks.

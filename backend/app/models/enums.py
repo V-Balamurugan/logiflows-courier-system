@@ -25,7 +25,9 @@ class ServiceType(str, Enum):
 class PaymentStatus(str, Enum):
     PENDING = "PENDING"
     PAID = "PAID"
+    FAILED = "FAILED"
     REFUNDED = "REFUNDED"
+    CANCELLED = "CANCELLED"
 
 
 class ParcelStatus(str, Enum):

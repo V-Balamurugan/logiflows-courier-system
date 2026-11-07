@@ -9,12 +9,14 @@ from app.schemas.parcel import (
     ParcelCreate,
     ParcelUpdate,
     ParcelCancelRequest,
+    PaymentRecordRequest,
     ParcelResponse
 )
 from app.models.user import User
 from app.models.enums import ParcelStatus
 from app.services.parcel_service import ParcelService
 from app.services.pricing_service import PricingEngine
+from app.services.payment_service import PaymentService
 from app.dependencies.auth_deps import get_current_user
 
 router = APIRouter(prefix="/parcels", tags=["Parcels"])
@@ -64,6 +66,17 @@ def get_parcel(
 ):
     """Retrieves full parcel details and milestone tracking history (tenant-scoped)."""
     return ParcelService.get_parcel_by_tracking(db, tracking_number, current_user=current_user)
+
+
+@router.post("/{tracking_number}/payment", response_model=ParcelResponse)
+def record_payment(
+    tracking_number: str,
+    req: PaymentRecordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Processes and records a verified payment transaction for the shipment."""
+    return PaymentService.record_payment(db, current_user, tracking_number, req)
 
 
 @router.post("/{tracking_number}/cancel", response_model=ParcelResponse)

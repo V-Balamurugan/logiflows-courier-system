@@ -133,3 +133,4 @@ def test_out_for_delivery_precondition_requires_assignment(db_session, state_tes
         )
     assert exc_info.value.status_code == 400
     assert "without an active delivery assignment" in exc_info.value.detail.lower()
+

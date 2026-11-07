@@ -201,6 +201,7 @@ def test_tampered_qr_signature_fails_and_audited(client, db_session, qr_test_set
     assert "tampering" in res.json()["detail"].lower()
 
     # Verify failed scan audit record
+    db_session.rollback()
     failed_scan = db_session.query(CustodyScan).filter(
         CustodyScan.scanned_by_id == agent1.id,
         CustodyScan.is_successful == False
@@ -231,6 +232,7 @@ def test_expired_qr_code_fails_and_audited(client, db_session, qr_test_setup):
     assert "expired" in res.json()["detail"].lower()
 
     # Verify failed scan audit record
+    db_session.rollback()
     failed_scan = db_session.query(CustodyScan).filter(
         CustodyScan.scanned_by_id == agent1.id,
         CustodyScan.is_successful == False

@@ -1,3 +1,4 @@
+import concurrent.futures
 import pytest
 from fastapi import HTTPException
 from app.models.parcel import Parcel
@@ -129,10 +130,11 @@ def test_concurrent_conflicting_transitions_produce_one_success(client, db_sessi
         json={"status": "CANCELLED", "expected_version": initial_version},
         headers=hdrs
     )
-    assert res2.status_code == 409
+    assert res2.status_code == 409, res2.text
     assert "conflict" in res2.json()["detail"].lower()
 
     # Verify parcel state is preserved from first valid transition
     db_session.refresh(parcel)
     assert parcel.delivery_status == ParcelStatus.AT_ORIGIN_BRANCH
     assert parcel.version_id == 2
+
