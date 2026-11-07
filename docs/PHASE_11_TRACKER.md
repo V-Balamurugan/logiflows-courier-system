@@ -90,3 +90,15 @@
 - [x] **AC4: Delivery Agent Workload Capping:** Maximum concurrent active assignments for an agent capped at 10. Exceeding workload returns HTTP 409 Conflict.
 - [x] **AC5: Atomic State Synchronization:** Creating an assignment atomically transitions vehicle status to `ASSIGNED` and parcel status via `ShipmentStateMachine`. Completing/failing an assignment atomically updates assignment, releases vehicle to `AVAILABLE`, and advances parcel state to `DELIVERED` / `DELIVERY_FAILED`.
 - [x] **AC6: Tenant & Role Authorization:** Only `SUPER_ADMIN`, `ORG_ADMIN`, and branch-scoped `BRANCH_MANAGER` can assign deliveries. Delivery agents or customers attempting assignments receive HTTP 403 Forbidden. Cross-tenant assignments return HTTP 404 Not Found. Mid-transaction failures rollback cleanly.
+
+
+---
+
+## 8. Sub-Phase 11.5 Acceptance Criteria Verification
+
+- [x] **AC1: Coordinate Bounds & Numeric Validation:** Latitude strictly bounded to [-90.0, +90.0] and longitude to [-180.0, +180.0]. Out-of-bounds coordinates, NaN, and Infinite values rejected with HTTP 422 Unprocessable Entity across both manual tracking updates and QR custody scans.
+- [x] **AC2: Future Timestamp Rejection:** Ingested tracking timestamps beyond 5 minutes of clock drift rejected with HTTP 422 Unprocessable Entity.
+- [x] **AC3: Deterministic Latest Location & History Sorting:** Milestone history deterministically ordered by `created_at ASC, id ASC`; current location coordinates (`current_lat`, `current_lng`) deterministically resolved using `created_at DESC, id DESC`.
+- [x] **AC4: Composite Index for Tracking History:** Composite index `ix_tracking_history_parcel_created_id` on `tracking_history(parcel_id, created_at, id)` created via reversible Alembic migration `e5f6a7b8c9d0`.
+- [x] **AC5: Strict Public Tracking Data Sanitization (Zero PII):** Public tracking endpoint `GET /api/v1/tracking/public/{tracking_number}` exposes strictly operational milestones, transit cities, and coarse checkpoints. Customer phones, street addresses, receiver phones, and internal employee IDs are 100% redacted. Non-existent tracking numbers return uniform HTTP 404 without enumeration leakage.
+- [x] **AC6: Authorized Detailed Tracking with Tenant Isolation:** Endpoint `GET /api/v1/tracking/{tracking_number}` verifies authorization: only the booking customer, Super Admin, or staff within the operating organization can access full sender/receiver records. Unauthorized or cross-tenant users receive HTTP 404.
