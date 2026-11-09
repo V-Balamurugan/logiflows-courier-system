@@ -79,8 +79,9 @@ Use the quick 1-click buttons on the Login page or log in with these credentials
 - **Frontend:** React 19, TypeScript, Vite, Tailwind CSS v4, React Router v7, TanStack Query, Axios, Lucide React, Leaflet.js with OpenStreetMap.
 - **Backend:** Python 3.12+, FastAPI, SQLAlchemy 2.x, Pydantic v2, Alembic, PyJWT, Bcrypt, ReportLab, QRCode.
 - **Databases:** PostgreSQL 16 (Production) / SQLite with WAL & StaticPool (Local Dev / Pytest).
-- **Testing:** Pytest (Backend, 15 tests), Vitest & RTL (Frontend).
-- **DevOps:** Docker, Docker Compose, Nginx.
+- **Testing:** Pytest (Backend: 77 tests, 89% coverage), Vitest & RTL (Frontend: 8 tests), Playwright (E2E: 30 tests across Desktop, Mobile, Tablet).
+- **Security & Quality:** pip-audit (0 vulnerabilities), npm audit (0 high/critical), Oxlint (0 errors), tsc (0 errors).
+- **DevOps:** Docker Compose with automated one-shot migration service, Nginx reverse proxy with security headers (CSP, HSTS, X-Frame-Options), GitHub Actions CI.
 
 ---
 
@@ -97,6 +98,8 @@ python -m venv venv
 source venv/bin/activate
 
 pip install -r requirements.txt
+alembic upgrade head
+python -m app.cli seed-demo
 uvicorn app.main:app --reload --port 8000
 ```
 API Documentation will be live at `http://localhost:8000/docs`.
@@ -116,22 +119,41 @@ Web application will be live at `http://localhost:5173`.
 ### Backend Unit & Integration Tests (Pytest)
 ```bash
 cd backend
-.\venv\Scripts\pytest -v
+.\venv\Scripts\pytest -v --cov=app --cov-report=term-missing
 ```
-*Current test suite: 15/15 tests passing (Auth, Branches, Employees, Parcels, Pricing, Assignments, QR Custody).*
+*Current test suite: 77/77 tests passing (89% total coverage; auth, security, state machine, tenant isolation, and RBAC matrix).*
 
 ### Frontend Component Tests (Vitest)
 ```bash
 cd frontend
-npm run test
+npm test
 ```
-*Current test suite: 3/3 tests passing.*
+*Current test suite: 8/8 tests passing (Badge, Leaflet maps, routing, error handling).*
+
+### End-to-End User Journeys (Playwright)
+```bash
+cd frontend
+npx playwright test
+```
+*Current test suite: 30/30 tests passing across Desktop Chrome, Mobile Chrome (iPhone), and Tablet (iPad).*
+
+### Security & Linter Verification
+```bash
+# Backend dependency audit
+pip-audit -r backend/requirements.txt
+
+# Frontend linter and typecheck
+cd frontend
+npm run lint
+npx tsc -b
+npm audit --audit-level=high
+```
 
 ---
 
 ## 🐳 Docker Compose Deployment
 
-Run the complete stack with PostgreSQL, FastAPI, and Nginx frontend in containers:
+Run the complete production-grade stack with PostgreSQL 16, automated Alembic migration service, FastAPI, and Nginx frontend in containers:
 
 ```bash
 docker compose up --build -d
