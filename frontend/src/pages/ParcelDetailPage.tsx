@@ -1,17 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import {
-  Package,
-  ArrowLeft,
-  Download,
-  QrCode,
-  MapPin,
-  Clock,
-  ShieldCheck,
-  Calendar,
-  Truck,
-  CheckCircle2,
-} from 'lucide-react';
+import { ArrowLeft, Download } from 'lucide-react';
 import { parcelApi, custodyApi } from '../api';
 import { Parcel } from '../types';
 import { Badge } from '../components/Badge';
@@ -19,7 +8,7 @@ import { Badge } from '../components/Badge';
 export const ParcelDetailPage: React.FC = () => {
   const { trackingNumber } = useParams<{ trackingNumber: string }>();
   const [parcel, setParcel] = useState<Parcel | null>(null);
-  const [custodyLogs, setCustodyLogs] = useState<any[]>([]);
+  const [_custodyLogs, setCustodyLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

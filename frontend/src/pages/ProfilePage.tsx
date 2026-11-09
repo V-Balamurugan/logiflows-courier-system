@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Lock, Mail, Phone, Building2, ShieldCheck, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Lock, Mail, Phone, Building2, ShieldCheck, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { authApi } from '../api';
 import { Badge } from '../components/Badge';

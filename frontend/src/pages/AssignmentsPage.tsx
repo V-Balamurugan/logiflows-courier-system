@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SendHorizontal, Plus, Search, Truck, User, CheckCircle2, Clock } from 'lucide-react';
+import { Plus, User } from 'lucide-react';
 import { assignmentApi, parcelApi, employeeApi, vehicleApi } from '../api';
 import { DeliveryAssignment, Parcel, User as UserType, Vehicle } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -118,7 +118,13 @@ export const AssignmentsPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
-              {assignments.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-slate-400">
+                    Loading assignments...
+                  </td>
+                </tr>
+              ) : assignments.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-400">
                     No active assignments found.
