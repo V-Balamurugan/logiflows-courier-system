@@ -25,14 +25,8 @@ from app.routers import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Ensure database schema is created
-    Base.metadata.create_all(bind=engine)
-    # Seed baseline administrator and organization data
-    db = SessionLocal()
-    try:
-        init_db(db)
-    finally:
-        db.close()
+    # Schema lifecycle is managed via Alembic migrations.
+    # Demo seeding is executed via CLI: python -m app.cli seed-demo
     yield
 
 
