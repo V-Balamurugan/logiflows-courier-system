@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     FIRST_SUPERADMIN_EMAIL: str = "superadmin@logiflows.com"
     FIRST_SUPERADMIN_PASSWORD: str = "SuperAdmin@LogiFlows2026!"
     
+    RATE_LIMIT_MAX_REQUESTS: int = 100
+    RATE_LIMIT_WINDOW_SECONDS: int = 60
+    
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

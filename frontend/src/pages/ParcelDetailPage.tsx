@@ -16,12 +16,15 @@ export const ParcelDetailPage: React.FC = () => {
       if (!trackingNumber) return;
       setLoading(true);
       try {
-        const [pData, cData] = await Promise.all([
-          parcelApi.get(trackingNumber),
-          custodyApi.getHistory(trackingNumber),
-        ]);
+        const pData = await parcelApi.get(trackingNumber);
         setParcel(pData);
-        setCustodyLogs(cData);
+        try {
+          const cData = await custodyApi.getHistory(trackingNumber);
+          setCustodyLogs(cData);
+        } catch {
+          // Internal custody logs are staff-only; graceful fallback for customers
+          setCustodyLogs([]);
+        }
       } catch (err) {
         console.error(err);
       } finally {
