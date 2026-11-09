@@ -49,7 +49,7 @@ jobs:
 
       - name: Verify Database Migrations & Drift (PostgreSQL 16)
         env:
-          DATABASE_URL: postgresql://logiflows_user:logiflows_pass@localhost:5432/logiflows_test_db
+          DATABASE_URL: postgresql+psycopg://logiflows_user:logiflows_pass@localhost:5432/logiflows_test_db
         run: |
           alembic upgrade head
           alembic check
