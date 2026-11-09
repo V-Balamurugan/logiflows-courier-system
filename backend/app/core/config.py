@@ -54,6 +54,10 @@ class Settings(BaseSettings):
                 "secret",
                 "changeme",
                 "admin",
+                "password",
+                "12345678",
+                "default",
+                "<SET_ME>",
             ]
             if not self.SECRET_KEY or self.SECRET_KEY in insecure_defaults or len(self.SECRET_KEY) < 32:
                 raise ValueError(
