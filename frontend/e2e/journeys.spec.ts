@@ -200,4 +200,32 @@ test.describe('LogiFlows Courier System E2E Suite', () => {
     await expect(page.locator('input[placeholder*="Apex Logistical Solutions"]')).toBeVisible();
   });
 
+  test('Journey 14: Cryptographic custody chain verification audit modal', async ({ page }) => {
+    await page.goto('/login');
+    await page.locator('input[type="email"]').fill('orgadmin@logiflows.com');
+    await page.locator('input[type="password"]').fill('OrgAdmin@123');
+    await page.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(/.*dashboard/);
+
+    await page.goto('/parcels/LF-2026-BOM001');
+    await expect(page.locator('text=LF-2026-BOM001')).toBeVisible({ timeout: 10000 });
+
+    const auditBtn = page.locator('button:has-text("Verify Custody Chain")').first();
+    await expect(auditBtn).toBeVisible();
+    await auditBtn.click();
+
+    // Verify modal opens with SHA-256 cryptographic audit title
+    await expect(page.locator('text=Cryptographic Chain of Custody')).toBeVisible();
+    await expect(page.locator('button:has-text("Close Audit")')).toBeVisible();
+    await page.locator('button[aria-label="Close modal"]').click({ force: true });
+    await expect(page.locator('text=Cryptographic Chain of Custody')).not.toBeVisible();
+  });
+
+  test('Journey 15: Public Tracking Live GPS stream and milestone timeline', async ({ page }) => {
+    await page.goto('/tracking?number=LF-2026-BOM001');
+    await expect(page.locator('text=Shipment Live Tracker')).toBeVisible();
+    await expect(page.locator('text=LF-2026-BOM001')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('text=Transit Geo-Route Map')).toBeVisible();
+  });
+
 });

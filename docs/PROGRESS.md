@@ -1,10 +1,10 @@
 # LogiFlows — Master Development Progress Tracker (Stage 1)
 
 **Last Updated:** November 10, 2026  
-**Current Phase:** Phase 12 (MERGED) $\rightarrow$ Phase 13 (IN PROGRESS)  
+**Current Phase:** Phase 13 (COMPLETE & VERIFIED) $\rightarrow$ Phase 14 (READY)  
 **Base Branch:** `hardening/phase-11`  
 **Active Work Branch:** `phase-13/tracking-custody`  
-**Pull Request:** [PR #4 Merged](https://github.com/V-Balamurugan/logiflows-courier-system/pull/4)  
+**Pull Request:** [PR #5: Phase 13 Tracking & QR Custody Operations](https://github.com/V-Balamurugan/logiflows-courier-system/pull/5)  
 
 ---
 
@@ -30,8 +30,8 @@
 | :--- | :--- | :--- | :--- | :--- |
 | **Phase 11** | System Hardening & Verification | **COMPLETE** | `hardening/phase-11.10-final-verification` / [PR #3](https://github.com/V-Balamurugan/logiflows-courier-system/pull/3) | **PASSED (Green)** |
 | **Phase 12** | Core Logistics Business Workflows (12.1–12.7) | **COMPLETE** | `phase-12/core-workflows` / [PR #4](https://github.com/V-Balamurugan/logiflows-courier-system/pull/4) | **MERGED into hardening/phase-11** |
-| **Phase 13** | Tracking & QR Custody Operations | **IN PROGRESS** | `phase-13/tracking-custody` | PR to be opened |
-| **Phase 14** | Branch-to-Branch Linehaul Transfers & Operations | NOT STARTED | — | — |
+| **Phase 13** | Tracking & QR Custody Operations (13.1–13.6) | **COMPLETE** | `phase-13/tracking-custody` / [PR #5](https://github.com/V-Balamurugan/logiflows-courier-system/pull/5) | **VERIFIED (Ready for Review)** |
+| **Phase 14** | Branch-to-Branch Linehaul Transfers & Operations | READY | `phase-14/linehaul-transfers` | Pending Phase 13 merge |
 | **Phase 15** | Dynamic Route Optimization & Map Integration | NOT STARTED | — | — |
 | **Phase 16** | AI Delay Prediction & Machine Learning | NOT STARTED | — | — |
 | **Phase 17** | Real-Time Notifications & n8n Workflows | NOT STARTED | — | — |
@@ -42,21 +42,63 @@
 
 ---
 
-## 3. Phase 12 Verified Deliverables & Evidence
+## 3. Phase 13 Verified Deliverables & Evidence
 
 ### Concrete Evidence Summary (Section 8 Global Phase Gate)
 
 | Gate / Command | Command Executed | Result | Evidence |
 | :--- | :--- | :--- | :--- |
-| **Alembic Drift** | `alembic check` | **PASSED** | `No new upgrade operations detected.` (Exit code 0) |
-| **Backend Pytest** | `pytest -v --cov=app` | **PASSED** | `94 passed in 39.16s; Coverage: 85%` (TOTAL: 2805 statements, 430 missed) |
-| **Frontend Vitest** | `npm test -- --run` | **PASSED** | `Test Files: 3 passed; Tests: 19 passed (19)` in 2.87s |
-| **Type Check** | `npx tsc -b` | **PASSED** | Exit code 0, 0 type errors |
-| **Frontend Build** | `npm run build` | **PASSED** | `✓ built in 868ms` |
+| **Alembic Drift** | `alembic check` | **PASSED** | `No new upgrade operations detected.` (Exit code 0, head `f6a7b8c9d0e1`) |
+| **Backend Pytest** | `pytest backend/app/tests --cov=app` | **PASSED** | `100 passed in 45.17s; Coverage: 85%` (Target $\ge 80\%$, 2935 statements) |
+| **Frontend Vitest** | `npm test -- --run` | **PASSED** | `Test Files: 4 passed; Tests: 26 passed (26)` in 6.27s |
+| **Type Check** | `tsc -b` | **PASSED** | Exit code 0, 0 type errors |
+| **Frontend Build** | `npm run build` | **PASSED** | `✓ built in 1.12s` (Production bundle generated) |
 | **pip-audit** | `pip-audit` | **PASSED** | `No known vulnerabilities found` |
 | **npm audit** | `npm audit --audit-level=high` | **PASSED** | `found 0 vulnerabilities` |
-| **Playwright E2E** | `npx playwright test` | **PASSED** | `39 passed (1.3m)` across Desktop Chrome (13), Mobile Chrome (13), Tablet (13) |
+| **Playwright E2E** | `npx playwright test` | **PASSED** | `45 passed (2.3m)` across Desktop Chrome (15), Mobile Chrome (15), Tablet (15) |
 | **Docker Compose** | `docker compose config -q` | **PASSED** | Exit code 0, valid dependency graph |
+| **Oxlint** | `oxlint` | **PASSED** | 0 errors |
+
+---
+
+## 4. Phase 13 Modules & Acceptance Criteria Audit
+
+- [x] **13.1 Public Tracking Endpoint:**
+  - `GET /api/v1/tracking/public/{tracking_number}` returns sanitized milestone history in chronological order.
+  - Strict zero-PII guarantee: excludes sender/receiver names, phone numbers, email addresses, street addresses, and monetary charges.
+  - Returns HTTP 404 with standard error contract on invalid or non-existent tracking code.
+- [x] **13.2 Authenticated Tracking Endpoint:**
+  - `GET /api/v1/tracking/{tracking_number}` returns complete consignment specifications and full tracking event history.
+  - Role-based authorization and strict tenant isolation: consignor customer can view their own consignment; cross-tenant staff and unrelated customers receive HTTP 404 (zero resource enumeration).
+- [x] **13.3 GPS Coordinate & Drift Validation:**
+  - Strict bounding box validation on latitude ($[-90, 90]$) and longitude ($[-180, 180]$).
+  - Explicit rejection of `NaN`, `Inf`, and out-of-bounds coordinates with HTTP 422.
+  - Future timestamp drift protection: scans and milestone updates timestamped more than 5 minutes in the future are rejected with HTTP 422.
+- [x] **13.4 Cryptographic QR Custody Tokens:**
+  - Secure QR code payload format `LFQR.<tracking_number>.<issued_at>.<expires_at>.<nonce>.<signature>` with HMAC-SHA256 signature binding.
+  - Tampered signatures or expired QR tokens rejected with HTTP 400 and logged to `custody_scans` with `is_successful=False` for security audit.
+- [x] **13.5 Immutable Custody Ledger with Hash Chaining:**
+  - Alembic migration `f6a7b8c9d0e1` adds `previous_hash` and `record_hash` (SHA-256) columns.
+  - Genesis scan links to `GENESIS_CUSTODY_HASH`; each subsequent scan links deterministically to the preceding scan's hash.
+  - Audit endpoint `GET /api/v1/custody/{tracking_number}/verify-chain` verifies unbroken cryptographic continuity and detects database tampering (`tamper_detected=True`, `is_valid=False`).
+  - Interactive "Audit Hash Chain" modal integrated in `ParcelDetailPage.tsx` and `QRScannerPage.tsx`.
+- [x] **13.6 Real-Time Milestone Streaming via SSE:**
+  - `GET /api/v1/tracking/live/{tracking_number}` streaming `text/event-stream` with instant `INITIAL_STATE` event and state machine broadcast integration.
+  - Automatic 15-second keep-alive heartbeat comments to prevent proxy drops.
+  - Real-time client-side synchronization and pulsing "Live GPS Stream" indicator badge in `PublicTrackingPage.tsx`.
+
+---
+
+## 5. Next Steps for Phase 14
+
+1. Review and merge PR #5 (`phase-13/tracking-custody`) into `hardening/phase-11`.
+2. Create branch `phase-14/linehaul-transfers` from verified head.
+3. Implement Phase 14: Branch-to-Branch Linehaul Transfers & Operations:
+   - Linehaul transfer manifests (creation, seal numbers, vehicle assignment).
+   - Manifest dispatch, in-transit state transitions, and arrival receiving scans.
+   - Bagging / de-bagging consignment consolidation and reconciliation.
+   - Discrepancy reporting (missing or damaged consignments upon inward arrival).
+
 
 ---
 

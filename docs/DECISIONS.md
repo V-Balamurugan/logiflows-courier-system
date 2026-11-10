@@ -105,3 +105,34 @@ This document records architectural decisions, assumptions, and design patterns 
   - **Physical Payload Bounds:** Capped maximum single consignment weight at 500 kg and dimensions at 300 cm.
   - **Hub Serviceability:** Validates that origin and destination hubs belong to the same multi-tenant organization and possess valid, non-null geographic coordinates within standard finite bounds ($[-90, 90]$ latitude, $[-180, 180]$ longitude).
 - **Status:** Adopted & Verified (Phase 12).
+
+---
+
+## ADR-010: Tamper-Evident Hash-Chained Custody Ledger
+
+- **Context:** Consignment custody transfers across linehaul hubs, delivery vehicles, and agents require cryptographic immutability so that database modifications, altered scan types, or forged timestamps can be detected deterministically.
+- **Decision:**
+  - Added `previous_hash` (VARCHAR 64) and `record_hash` (VARCHAR 64) columns to `custody_scans` table via Alembic migration `f6a7b8c9d0e1`.
+  - For each successful scan, `record_hash` is computed as the SHA-256 digest of:
+    `f"{prev_hash}:{parcel.id}:{scan_type.value}:{scanned_by_id}:{branch_id}:{iso_timestamp}"`.
+  - The first scan for any parcel binds to `GENESIS_CUSTODY_HASH`. Subsequent scans link strictly to the preceding successful scan's `record_hash`.
+  - Added `GET /api/v1/custody/{tracking_number}/verify-chain` which recomputes hashes across the sequence: any direct DB modification or broken link sets `tamper_detected=True`, `is_valid=False`.
+  - Failed scan attempts (tampered signatures, expired QR codes, unauthorized role transitions) are recorded in `custody_scans` for security auditing with `is_successful=False`, but do not advance the chain, preserving audit history while keeping the valid chain unbroken.
+- **Status:** Adopted & Verified (Phase 13).
+
+---
+
+## ADR-011: Server-Sent Events (SSE) Real-Time Milestone Streaming
+
+- **Context:** Shippers, consignees, and hub staff require real-time tracking updates as parcels transition between physical checkpoints without high-frequency polling.
+- **Decision:**
+  - Implemented `MilestoneBroadcaster` pub/sub service with in-memory subscriber queues per tracking number.
+  - Linked `ShipmentStateMachine.transition` to automatically broadcast milestone events upon state mutation.
+  - Provided `GET /api/v1/tracking/live/{tracking_number}` endpoint returning `text/event-stream`:
+    - Immediately pushes an `INITIAL_STATE` event containing current parcel status and location.
+    - Emits live milestone payloads as state transitions occur.
+    - Yields periodic `: keep-alive\n\n` comments every 15 seconds to prevent proxy or browser timeouts.
+    - Automatically cleans up listener queues when client disconnects.
+  - Frontend `PublicTrackingPage` establishes an `EventSource` connection to update checkpoints and display an active "Live GPS Stream" status indicator.
+- **Status:** Adopted & Verified (Phase 13).
+

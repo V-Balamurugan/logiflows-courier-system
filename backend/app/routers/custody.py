@@ -3,13 +3,17 @@ from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
-from app.schemas.custody import CustodyScanRequest, CustodyScanResponse
+from app.schemas.custody import (
+    CustodyScanRequest,
+    CustodyScanResponse,
+    CustodyChainVerificationResponse
+)
 from app.models.user import User
 from app.models.custody import CustodyScan
 from app.models.parcel import Parcel
 from app.models.enums import UserRole
 from app.services.custody_service import CustodyService
-from app.dependencies.auth_deps import require_staff
+from app.dependencies.auth_deps import require_staff, get_current_user
 
 router = APIRouter(prefix="/custody", tags=["QR Custody"])
 
@@ -22,6 +26,16 @@ def process_qr_scan(
 ):
     """Processes employee QR scan, validates transition eligibility, and records chain-of-custody transfer."""
     return CustodyService.process_scan(db, current_user, req)
+
+
+@router.get("/{tracking_number}/verify-chain", response_model=CustodyChainVerificationResponse)
+def verify_custody_chain(
+    tracking_number: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Cryptographically verifies immutable hash-chained custody logs for zero tampering."""
+    return CustodyService.verify_custody_chain(db, current_user, tracking_number)
 
 
 @router.get("/{tracking_number}/history")
