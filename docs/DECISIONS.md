@@ -59,3 +59,49 @@ This document records architectural decisions, assumptions, and design patterns 
   - **CSV Formula Sanitization:** Prepend single quote `'` to text fields beginning with `=`, `+`, `-`, `@`, `\t`, `\r` before CSV export.
   - **Nginx Security Headers:** Nginx adds `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`, and `Content-Security-Policy`.
 - **Status:** Adopted & Verified (Phase 11).
+
+---
+
+## ADR-006: Atomic Multi-Tenant Organization & Admin Registration
+
+- **Context:** Self-service organization onboarding must create both the enterprise organization entity and its initial Organization Administrator atomically. Partial registrations where an organization is created but user creation fails (e.g. duplicate email) leave orphaned tenant records.
+- **Decision:**
+  - Implemented `POST /organizations/register` with strict transactional rollback: both `Organization` and `User(role=ORG_ADMIN)` records are flushed in a single transaction block. If the admin email or organization code conflicts, the transaction rolls back cleanly without persisting orphaned records.
+  - Organization suspension (`is_active=False`) immediately enforces a hard lockout at both login (`auth_service.py`) and token dependency layers (`auth_deps.py`), returning HTTP 403 to prevent any suspended tenant access.
+- **Status:** Adopted & Verified (Phase 12).
+
+---
+
+## ADR-007: Cryptographic Single-Use Employee Activation & Instant Session Lockout
+
+- **Context:** Dispersed field logistics workers and branch staff require secure onboarding without transmitting unencrypted static passwords. When an employee is deactivated, their active sessions must be invalidated immediately.
+- **Decision:**
+  - Employee provisioning utilizes cryptographically signed one-time invite tokens (`token_type="invite"`, 48-hour expiration) generated via `employeeApi.invite`.
+  - When the employee consumes the token via `/employees/accept-invite`, their credentials are set and the token's unique identifier (`jti`) is written to `revoked_tokens`, preventing replay attacks.
+  - Staff deactivation immediately revokes authentication: `get_current_user` verifies `is_active=True` on each protected request, preventing deactivated staff from performing further operations.
+  - Role hierarchy enforces a privilege ceiling: an administrator cannot provision or elevate a user to a role higher than or equal to their own rank (`SUPER_ADMIN > ORG_ADMIN > BRANCH_MANAGER > DELIVERY_AGENT > CUSTOMER`).
+- **Status:** Adopted & Verified (Phase 12).
+
+---
+
+## ADR-008: Explainable Dispatch Workload Engine & Fleet Capacity Allocation
+
+- **Context:** Branch dispatchers require data-driven intelligence when assigning parcels to delivery agents and vehicles to prevent delivery agent overload and vehicle capacity violations.
+- **Decision:**
+  - Implemented `get_dispatch_suggestions(parcel_id)` returning an explainable recommendation model:
+    - **Delivery Agent Ranking:** Evaluates current active assignments against agent maximum capacity ($10$ concurrent runs) to generate an explainable score with utilization percentages.
+    - **Fleet Payload Fit:** Validates parcel weight and volumetric dimensions against stationed available vehicles, providing an explicit capacity fit boolean and spare capacity explanation.
+    - **Zero Parcel Drop:** If an assignment is cancelled, `cancel_assignment` restores the parcel state to hub inventory, restores vehicle status to `AVAILABLE`, and records a structured audit event.
+- **Status:** Adopted & Verified (Phase 12).
+
+---
+
+## ADR-009: Strict Cargo & Postal Code Integrity Safeguards
+
+- **Context:** Logistics operations must reject prohibited contraband cargo, malformed postal codes, and unserviceable hub routes at booking time.
+- **Decision:**
+  - **Postal Code Validation:** Enforced regex `^\d{4,10}$` rejecting alphanumeric or malformed pincodes with HTTP 422.
+  - **Prohibited Cargo Filter:** Keyword scan in parcel notes rejecting contraband materials (`explosives`, `firearms`, `hazardous`, `contraband`, `biohazard`, `flammable`, `radioactive`, `weapons`) with HTTP 422.
+  - **Physical Payload Bounds:** Capped maximum single consignment weight at 500 kg and dimensions at 300 cm.
+  - **Hub Serviceability:** Validates that origin and destination hubs belong to the same multi-tenant organization and possess valid, non-null geographic coordinates within standard finite bounds ($[-90, 90]$ latitude, $[-180, 180]$ longitude).
+- **Status:** Adopted & Verified (Phase 12).

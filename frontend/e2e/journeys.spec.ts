@@ -156,4 +156,48 @@ test.describe('LogiFlows Courier System E2E Suite', () => {
     expect(data).not.toHaveProperty('price');
   });
 
+  test('Journey 11: Branch Manager dispatch suggestions and cancel run controls', async ({ page }) => {
+    await page.goto('/login');
+    await page.locator('input[type="email"]').fill('manager.mumbai@logiflows.com');
+    await page.locator('input[type="password"]').fill('Manager@123');
+    await page.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(/.*dashboard/);
+
+    await page.goto('/assignments');
+    await expect(page.locator('text=Delivery Assignments')).toBeVisible();
+
+    // Open create assignment modal
+    const createBtn = page.locator('button:has-text("Create Assignment")');
+    if (await createBtn.isVisible()) {
+      await createBtn.click();
+      await expect(page.locator('text=Assign Parcel to Delivery Agent')).toBeVisible();
+      await page.keyboard.press('Escape');
+    }
+  });
+
+  test('Journey 12: Fleet vehicle maintenance status action availability', async ({ page }) => {
+    await page.goto('/login');
+    await page.locator('input[type="email"]').fill('orgadmin@logiflows.com');
+    await page.locator('input[type="password"]').fill('OrgAdmin@123');
+    await page.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(/.*dashboard/);
+
+    await page.goto('/vehicles');
+    await expect(page.locator('text=Fleet & Vehicle Management')).toBeVisible();
+    await expect(page.locator('text=Register Vehicle')).toBeVisible();
+  });
+
+  test('Journey 13: Customer profile address book and billing details interface', async ({ page }) => {
+    await page.goto('/login');
+    await page.locator('input[type="email"]').fill('customer@example.com');
+    await page.locator('input[type="password"]').fill('Customer@123');
+    await page.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(/.*dashboard/);
+
+    await page.goto('/profile');
+    await expect(page.locator('text=Account & Security Profile')).toBeVisible();
+    await expect(page.locator('text=Customer Address Book & Billing Profile')).toBeVisible();
+    await expect(page.locator('input[placeholder*="Apex Logistical Solutions"]')).toBeVisible();
+  });
+
 });

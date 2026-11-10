@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from app.models.enums import UserRole
 
@@ -28,7 +28,7 @@ class UserUpdate(BaseModel):
 
 class EmployeeCreate(BaseModel):
     email: EmailStr
-    password: str = Field(..., min_length=6)
+    password: Optional[str] = Field(None, min_length=6, description="Optional initial password; if omitted, secure invite link is used")
     full_name: str = Field(..., min_length=2, max_length=255)
     phone: Optional[str] = None
     role: UserRole = Field(..., description="ORG_ADMIN, BRANCH_MANAGER, or DELIVERY_AGENT")
@@ -42,6 +42,20 @@ class EmployeeUpdate(BaseModel):
     role: Optional[UserRole] = None
     branch_id: Optional[int] = None
     is_active: Optional[bool] = None
+
+
+class EmployeeInviteResponse(BaseModel):
+    employee_id: int
+    email: str
+    invite_token: str
+    invite_url: str
+    expires_at: datetime
+    message: str = "One-time invitation token generated. Send this link to the employee to set their credentials."
+
+
+class AcceptInviteRequest(BaseModel):
+    invite_token: str = Field(..., description="One-time invitation JWT token")
+    new_password: str = Field(..., min_length=6, description="New secret password")
 
 
 class CustomerProfileResponse(BaseModel):
@@ -78,3 +92,14 @@ class EmployeeWorkloadResponse(BaseModel):
     active_assignments_count: int
     completed_assignments_count: int
 
+
+class EmployeeDashboardResponse(BaseModel):
+    employee_id: int
+    full_name: str
+    email: str
+    role: UserRole
+    branch_id: Optional[int] = None
+    is_active: bool
+    active_assignments_count: int
+    completed_assignments_count: int
+    failed_assignments_count: int

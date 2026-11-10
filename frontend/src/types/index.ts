@@ -33,6 +33,18 @@ export type ScanType =
   | 'OUT_FOR_DELIVERY' 
   | 'DELIVERY_CONFIRMATION';
 
+export interface Organization {
+  id: number;
+  name: string;
+  code: string;
+  contact_email: string;
+  contact_phone?: string;
+  address?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
 export interface User {
   id: number;
   email: string;
@@ -163,6 +175,96 @@ export interface DeliveryAssignment {
   vehicle_number?: string;
 }
 
+export interface EmployeeSuggestion {
+  employee_id: number;
+  full_name: string;
+  active_assignments: number;
+  max_capacity: number;
+  workload_utilization_pct: number;
+  is_available: boolean;
+  score: number;
+  explanation: string;
+}
+
+export interface OrganizationDashboard {
+  organization_id: number;
+  organization_name: string;
+  total_branches: number;
+  active_branches: number;
+  total_employees: number;
+  active_employees: number;
+  total_vehicles: number;
+  available_vehicles: number;
+  total_parcels: number;
+  active_deliveries: number;
+  completed_deliveries: number;
+}
+
+export interface BranchDashboard {
+  branch_id: number;
+  branch_name: string;
+  branch_code: string;
+  is_active: boolean;
+  active_parcels_origin: number;
+  active_parcels_dest: number;
+  total_active_parcels: number;
+  active_assignments: number;
+  assigned_employees: number;
+  assigned_vehicles: number;
+}
+
+export interface EmployeeDashboard {
+  employee_id: number;
+  full_name: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  branch_id?: number;
+  active_assignments: number;
+  completed_assignments: number;
+  total_assigned_parcels: number;
+}
+
+export interface EmployeeInviteResponse {
+  user_id: number;
+  email: string;
+  invite_token: string;
+  expires_in_hours: number;
+  invite_url: string;
+}
+
+export interface CustomerProfileUpdate {
+  company_name?: string;
+  gst_number?: string;
+  default_pickup_address?: string;
+  default_delivery_address?: string;
+}
+
+export interface VehicleSuggestion {
+  vehicle_id: number;
+  vehicle_number: string;
+  vehicle_type: string;
+  max_weight_kg: number;
+  max_volume_cbm?: number;
+  parcel_weight_kg: number;
+  weight_utilization_pct: number;
+  fits_capacity: boolean;
+  score: number;
+  explanation: string;
+}
+
+export interface DispatchSuggestionsResponse {
+  parcel_id: number;
+  tracking_number: string;
+  parcel_weight_kg: number;
+  parcel_volume_cbm: number;
+  branch_id: number;
+  branch_name: string;
+  suggested_employees: EmployeeSuggestion[];
+  suggested_vehicles: VehicleSuggestion[];
+  summary_recommendation: string;
+}
+
 export interface PublicTrackingResponse {
   tracking_number: string;
   status: ParcelStatus;
@@ -204,4 +306,3 @@ export interface DashboardStats {
     deliveries_completed: number;
   }[];
 }
-

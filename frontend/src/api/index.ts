@@ -8,7 +8,59 @@ import {
   DeliveryAssignment,
   PublicTrackingResponse,
   DashboardStats,
+  Organization,
+  OrganizationDashboard,
+  BranchDashboard,
+  EmployeeDashboard,
+  EmployeeInviteResponse,
+  CustomerProfileUpdate,
+  DispatchSuggestionsResponse,
 } from '../types';
+
+export const organizationApi = {
+  register: async (data: {
+    name: string;
+    code: string;
+    admin_name: string;
+    admin_email: string;
+    admin_password: string;
+    admin_phone?: string;
+    contact_email?: string;
+    contact_phone?: string;
+    address?: string;
+  }) => {
+    const res = await api.post('/organizations/register', data);
+    return res.data;
+  },
+  list: async (): Promise<Organization[]> => {
+    const res = await api.get<Organization[]>('/organizations');
+    return res.data;
+  },
+  getMyOrg: async (): Promise<Organization> => {
+    const res = await api.get<Organization>('/organizations/my-org');
+    return res.data;
+  },
+  updateMyOrg: async (data: Partial<Organization>): Promise<Organization> => {
+    const res = await api.patch<Organization>('/organizations/my-org', data);
+    return res.data;
+  },
+  get: async (id: number): Promise<Organization> => {
+    const res = await api.get<Organization>(`/organizations/${id}`);
+    return res.data;
+  },
+  update: async (id: number, data: Partial<Organization>): Promise<Organization> => {
+    const res = await api.patch<Organization>(`/organizations/${id}`, data);
+    return res.data;
+  },
+  setStatus: async (id: number, is_active: boolean): Promise<Organization> => {
+    const res = await api.patch<Organization>(`/organizations/${id}/status`, { is_active });
+    return res.data;
+  },
+  getDashboard: async (id: number): Promise<OrganizationDashboard> => {
+    const res = await api.get<OrganizationDashboard>(`/organizations/${id}/dashboard`);
+    return res.data;
+  },
+};
 
 export const authApi = {
   login: async (credentials: { email: string; password: string }): Promise<AuthResponse> => {
@@ -46,6 +98,10 @@ export const branchApi = {
     const res = await api.delete(`/branches/${id}`);
     return res.data;
   },
+  getDashboard: async (id: number): Promise<BranchDashboard> => {
+    const res = await api.get<BranchDashboard>(`/branches/${id}/dashboard`);
+    return res.data;
+  },
 };
 
 export const employeeApi = {
@@ -65,6 +121,23 @@ export const employeeApi = {
     const res = await api.get(`/employees/${id}/workload`);
     return res.data;
   },
+  invite: async (id: number): Promise<EmployeeInviteResponse> => {
+    const res = await api.post<EmployeeInviteResponse>(`/employees/${id}/invite`);
+    return res.data;
+  },
+  acceptInvite: async (data: {
+    invite_token: string;
+    new_password: string;
+    full_name?: string;
+    phone?: string;
+  }) => {
+    const res = await api.post('/employees/accept-invite', data);
+    return res.data;
+  },
+  getDashboard: async (id: number): Promise<EmployeeDashboard> => {
+    const res = await api.get<EmployeeDashboard>(`/employees/${id}/dashboard`);
+    return res.data;
+  },
 };
 
 export const customerApi = {
@@ -78,6 +151,18 @@ export const customerApi = {
   },
   getParcels: async (id: number): Promise<Parcel[]> => {
     const res = await api.get<Parcel[]>(`/customers/${id}/parcels`);
+    return res.data;
+  },
+  getMyProfile: async (): Promise<User> => {
+    const res = await api.get<User>('/customers/me/profile');
+    return res.data;
+  },
+  updateMyProfile: async (data: CustomerProfileUpdate): Promise<User> => {
+    const res = await api.put<User>('/customers/me/profile', data);
+    return res.data;
+  },
+  getMyParcels: async (): Promise<Parcel[]> => {
+    const res = await api.get<Parcel[]>('/customers/me/parcels');
     return res.data;
   },
 };
@@ -128,6 +213,10 @@ export const assignmentApi = {
     const res = await api.get<DeliveryAssignment[]>('/assignments', { params });
     return res.data;
   },
+  get: async (id: number): Promise<DeliveryAssignment> => {
+    const res = await api.get<DeliveryAssignment>(`/assignments/${id}`);
+    return res.data;
+  },
   create: async (data: {
     parcel_id: number;
     employee_id: number;
@@ -140,6 +229,14 @@ export const assignmentApi = {
   },
   updateStatus: async (id: number, status: string, notes?: string): Promise<DeliveryAssignment> => {
     const res = await api.put<DeliveryAssignment>(`/assignments/${id}/status`, { status, notes });
+    return res.data;
+  },
+  cancel: async (id: number, cancellation_reason: string): Promise<DeliveryAssignment> => {
+    const res = await api.post<DeliveryAssignment>(`/assignments/${id}/cancel`, { cancellation_reason });
+    return res.data;
+  },
+  getSuggestions: async (parcelId: number): Promise<DispatchSuggestionsResponse> => {
+    const res = await api.get<DispatchSuggestionsResponse>(`/assignments/suggestions/${parcelId}`);
     return res.data;
   },
 };
@@ -155,6 +252,10 @@ export const vehicleApi = {
   },
   update: async (id: number, data: Partial<Vehicle>): Promise<Vehicle> => {
     const res = await api.put<Vehicle>(`/vehicles/${id}`, data);
+    return res.data;
+  },
+  setMaintenance: async (id: number, in_maintenance: boolean, reason?: string): Promise<Vehicle> => {
+    const res = await api.patch<Vehicle>(`/vehicles/${id}/maintenance`, { in_maintenance, reason });
     return res.data;
   },
 };

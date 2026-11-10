@@ -58,6 +58,29 @@ class ParcelService:
             ):
                 raise HTTPException(status_code=400, detail="Branches do not belong to your organization")
 
+        # Serviceability check: Operating status must be ACTIVE
+        from app.models.enums import OperatingStatus
+        if origin_branch.operating_status == OperatingStatus.INACTIVE or dest_branch.operating_status == OperatingStatus.INACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Unserviceable route: Origin or destination hub is inactive for courier operations"
+            )
+
+        # Coordinate bounds validation
+        import math
+        for b in [origin_branch, dest_branch]:
+            if b.latitude is not None and (math.isnan(b.latitude) or math.isinf(b.latitude) or not (-90.0 <= b.latitude <= 90.0)):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Unserviceable route: Hub '{b.branch_name}' has invalid latitude coordinates"
+                )
+            if b.longitude is not None and (math.isnan(b.longitude) or math.isinf(b.longitude) or not (-180.0 <= b.longitude <= 180.0)):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Unserviceable route: Hub '{b.branch_name}' has invalid longitude coordinates"
+                )
+                raise HTTPException(status_code=400, detail="Branches do not belong to your organization")
+
         # Calculate pricing
         quote = PricingEngine.calculate_quote(
             weight_kg=data.weight_kg,
