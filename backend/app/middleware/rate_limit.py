@@ -8,7 +8,7 @@ from app.core.config import settings
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Sliding-window IP rate limiter for sensitive authentication endpoints."""
+    """Sliding-window IP rate limiter for sensitive authentication and public tracking endpoints."""
 
     def __init__(self, app, max_requests: int = 20, window_seconds: int = 60):
         super().__init__(app)
@@ -17,9 +17,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # In-memory store: { ip: [timestamp1, timestamp2, ...] }
         self._requests: Dict[str, List[float]] = defaultdict(list)
         # Targeted sensitive endpoints
-        self.rate_limited_paths = [
-            f"{settings.API_V1_STR}/auth/login",
-            f"{settings.API_V1_STR}/auth/register",
+        self.rate_limited_exact: set[Tuple[str, str]] = {
+            ("POST", f"{settings.API_V1_STR}/auth/login"),
+            ("POST", f"{settings.API_V1_STR}/auth/register"),
+            ("POST", f"{settings.API_V1_STR}/auth/refresh"),
+        }
+        self.rate_limited_prefixes: List[Tuple[str, str]] = [
+            ("GET", f"{settings.API_V1_STR}/tracking/public"),
         ]
 
     async def dispatch(self, request: Request, call_next) -> Response:
@@ -27,8 +31,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if settings.ENVIRONMENT == "test":
             return await call_next(request)
 
-        # Check if the request is targeting a sensitive auth endpoint with POST
-        if request.method == "POST" and request.url.path in self.rate_limited_paths:
+        # Check if the request is targeting an exact sensitive endpoint or protected prefix
+        is_rate_limited = (
+            (request.method, request.url.path) in self.rate_limited_exact
+            or any(
+                request.method == method and request.url.path.startswith(prefix)
+                for method, prefix in self.rate_limited_prefixes
+            )
+        )
+
+        if is_rate_limited:
             client_ip = request.client.host if request.client else "127.0.0.1"
             # Forwarded headers support if behind proxy
             forwarded_for = request.headers.get("X-Forwarded-For")

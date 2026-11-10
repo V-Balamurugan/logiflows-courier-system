@@ -283,8 +283,8 @@ def test_public_tracking_redaction_zero_pii(client, customer_headers):
 
 
 def test_authenticated_tracking_authorization_and_tenant_isolation(client, db_session, customer_headers, orgadmin_headers, superadmin_headers):
-    # Customer 1 books a parcel
-    b1, b2 = _get_same_org_branch_pair(client, customer_headers)
+    # Customer 1 books a parcel in Org Admin's organization
+    b1, b2 = _get_same_org_branch_pair(client, orgadmin_headers)
     booking_payload = {
         "origin_branch_id": b1,
         "dest_branch_id": b2,
@@ -317,17 +317,19 @@ def test_authenticated_tracking_authorization_and_tenant_isolation(client, db_se
     assert r_cust1.json()["sender_phone"] == "+91 91111 22222"
 
     # 2. Create another customer (Customer 2)
-    cust2 = User(
-        email="other.customer@example.com",
-        hashed_password="hash",
-        full_name="Other Customer",
-        phone="+91 99999 00000",
-        role=UserRole.CUSTOMER,
-        is_active=True
-    )
-    db_session.add(cust2)
-    db_session.commit()
-    db_session.refresh(cust2)
+    cust2 = db_session.query(User).filter(User.email == "other.customer@example.com").first()
+    if not cust2:
+        cust2 = User(
+            email="other.customer@example.com",
+            hashed_password="hash",
+            full_name="Other Customer",
+            phone="+91 99999 00000",
+            role=UserRole.CUSTOMER,
+            is_active=True
+        )
+        db_session.add(cust2)
+        db_session.commit()
+        db_session.refresh(cust2)
     cust2_token = create_access_token(subject=cust2.id, role=UserRole.CUSTOMER.value)
     cust2_headers = {"Authorization": f"Bearer {cust2_token}"}
 
@@ -344,30 +346,34 @@ def test_authenticated_tracking_authorization_and_tenant_isolation(client, db_se
     assert r_org.status_code == 200
 
     # 5. Staff from a different organization gets 404
-    other_org = Organization(
-        name="Alien Logistics Ltd",
-        code="ALIEN-LOG",
-        contact_email="alien@example.com",
-        contact_phone="+91 00000 11111",
-        address="Alien Corp",
-        is_active=True
-    )
-    db_session.add(other_org)
-    db_session.commit()
-    db_session.refresh(other_org)
+    other_org = db_session.query(Organization).filter(Organization.code == "ALIEN-LOG").first()
+    if not other_org:
+        other_org = Organization(
+            name="Alien Logistics Ltd",
+            code="ALIEN-LOG",
+            contact_email="alien@example.com",
+            contact_phone="+91 00000 11111",
+            address="Alien Corp",
+            is_active=True
+        )
+        db_session.add(other_org)
+        db_session.commit()
+        db_session.refresh(other_org)
 
-    alien_staff = User(
-        email="staff@alien.com",
-        hashed_password="hash",
-        full_name="Alien Staff",
-        phone="+91 00000 22222",
-        role=UserRole.ORG_ADMIN,
-        organization_id=other_org.id,
-        is_active=True
-    )
-    db_session.add(alien_staff)
-    db_session.commit()
-    db_session.refresh(alien_staff)
+    alien_staff = db_session.query(User).filter(User.email == "staff@alien.com").first()
+    if not alien_staff:
+        alien_staff = User(
+            email="staff@alien.com",
+            hashed_password="hash",
+            full_name="Alien Staff",
+            phone="+91 00000 22222",
+            role=UserRole.ORG_ADMIN,
+            organization_id=other_org.id,
+            is_active=True
+        )
+        db_session.add(alien_staff)
+        db_session.commit()
+        db_session.refresh(alien_staff)
     alien_token = create_access_token(subject=alien_staff.id, role=UserRole.ORG_ADMIN.value)
     alien_headers = {"Authorization": f"Bearer {alien_token}"}
 

@@ -1,12 +1,11 @@
 import React from 'react';
-import { ParcelStatus, UserRole, VehicleStatus, AssignmentStatus } from '../types';
 
 interface BadgeProps {
   status: string;
   variant?: 'status' | 'role' | 'vehicle' | 'assignment';
 }
 
-export const Badge: React.FC<BadgeProps> = ({ status, variant = 'status' }) => {
+export const Badge: React.FC<BadgeProps> = ({ status }) => {
   const getStyle = () => {
     switch (status) {
       // Parcel Statuses

@@ -1,15 +1,21 @@
 import math
+import re
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 from app.models.enums import ServiceType, PaymentStatus, ParcelStatus
 
+PROHIBITED_CARGO_KEYWORDS = {
+    "explosive", "explosives", "firearm", "firearms", "hazardous",
+    "flammable", "contraband", "radioactive", "biohazard", "ammunition"
+}
+
 
 class ParcelQuoteRequest(BaseModel):
-    weight_kg: float = Field(..., ge=0.01, le=1000.0, description="Actual physical weight in kg (0.01 - 1000.0)")
-    length_cm: float = Field(..., ge=1.0, le=500.0, description="Package length in cm (1.0 - 500.0)")
-    width_cm: float = Field(..., ge=1.0, le=500.0, description="Package width in cm (1.0 - 500.0)")
-    height_cm: float = Field(..., ge=1.0, le=500.0, description="Package height in cm (1.0 - 500.0)")
+    weight_kg: float = Field(..., ge=0.01, le=500.0, description="Actual physical weight in kg (0.01 - 500.0)")
+    length_cm: float = Field(..., ge=1.0, le=300.0, description="Package length in cm (1.0 - 300.0)")
+    width_cm: float = Field(..., ge=1.0, le=300.0, description="Package width in cm (1.0 - 300.0)")
+    height_cm: float = Field(..., ge=1.0, le=300.0, description="Package height in cm (1.0 - 300.0)")
     service_type: ServiceType = ServiceType.STANDARD
     origin_pincode: Optional[str] = None
     dest_pincode: Optional[str] = None
@@ -19,6 +25,16 @@ class ParcelQuoteRequest(BaseModel):
     def validate_finite(cls, v: float, info) -> float:
         if math.isnan(v) or math.isinf(v):
             raise ValueError(f"{info.field_name} must be a valid finite number")
+        return v
+
+    @field_validator("origin_pincode", "dest_pincode")
+    @classmethod
+    def validate_pincodes(cls, v: Optional[str], info) -> Optional[str]:
+        if v:
+            clean = v.strip()
+            if not re.match(r"^\d{4,10}$", clean):
+                raise ValueError(f"{info.field_name} must be a valid 4-10 digit numeric postal code")
+            return clean
         return v
 
 
@@ -54,11 +70,13 @@ class ParcelCreate(BaseModel):
     receiver_state: str = Field(..., min_length=2)
     receiver_pincode: str = Field(..., min_length=3)
 
-    weight_kg: float = Field(..., ge=0.01, le=1000.0, description="Weight in kg (0.01 - 1000.0)")
-    length_cm: float = Field(..., ge=1.0, le=500.0, description="Length in cm (1.0 - 500.0)")
-    width_cm: float = Field(..., ge=1.0, le=500.0, description="Width in cm (1.0 - 500.0)")
-    height_cm: float = Field(..., ge=1.0, le=500.0, description="Height in cm (1.0 - 500.0)")
+    weight_kg: float = Field(..., ge=0.01, le=500.0, description="Weight in kg (0.01 - 500.0)")
+    length_cm: float = Field(..., ge=1.0, le=300.0, description="Length in cm (1.0 - 300.0)")
+    width_cm: float = Field(..., ge=1.0, le=300.0, description="Width in cm (1.0 - 300.0)")
+    height_cm: float = Field(..., ge=1.0, le=300.0, description="Height in cm (1.0 - 300.0)")
     service_type: ServiceType = ServiceType.STANDARD
+    category: Optional[str] = Field("GENERAL", description="Shipment category: GENERAL, ELECTRONICS, APPAREL, DOCUMENTS")
+    idempotency_key: Optional[str] = Field(None, description="Optional client idempotency key to prevent double-booking")
     notes: Optional[str] = None
 
     @field_validator("weight_kg", "length_cm", "width_cm", "height_cm")
@@ -66,6 +84,24 @@ class ParcelCreate(BaseModel):
     def validate_finite(cls, v: float, info) -> float:
         if math.isnan(v) or math.isinf(v):
             raise ValueError(f"{info.field_name} must be a valid finite number")
+        return v
+
+    @field_validator("sender_pincode", "receiver_pincode")
+    @classmethod
+    def validate_postal_codes(cls, v: str, info) -> str:
+        clean = v.strip()
+        if not re.match(r"^\d{4,10}$", clean):
+            raise ValueError(f"{info.field_name} must be a valid 4-10 digit numeric postal code")
+        return clean
+
+    @field_validator("notes")
+    @classmethod
+    def validate_prohibited_items(cls, v: Optional[str]) -> Optional[str]:
+        if v:
+            lower = v.lower()
+            for kw in PROHIBITED_CARGO_KEYWORDS:
+                if re.search(rf"\b{kw}\b", lower):
+                    raise ValueError(f"Prohibited cargo declaration detected: '{kw}'. Consignment cannot be booked.")
         return v
 
 

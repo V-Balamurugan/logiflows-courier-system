@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { User, Lock, Mail, Phone, Building2, ShieldCheck, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Lock, Mail, Phone, Building2, ShieldCheck, CheckCircle2, AlertCircle, MapPin, Save } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { authApi } from '../api';
+import { authApi, customerApi } from '../api';
 import { Badge } from '../components/Badge';
 
 export const ProfilePage: React.FC = () => {
@@ -12,6 +12,16 @@ export const ProfilePage: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const [profileData, setProfileData] = useState({
+    company_name: user?.customer_profile?.company_name || '',
+    gst_number: user?.customer_profile?.gst_number || '',
+    default_pickup_address: user?.customer_profile?.default_pickup_address || '',
+    default_delivery_address: user?.customer_profile?.default_delivery_address || '',
+  });
+  const [profileSuccess, setProfileSuccess] = useState('');
+  const [profileError, setProfileError] = useState('');
+  const [profileLoading, setProfileLoading] = useState(false);
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,6 +47,21 @@ export const ProfilePage: React.FC = () => {
       setError(err.response?.data?.detail || 'Failed to update password');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleProfileSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileError('');
+    setProfileSuccess('');
+    setProfileLoading(true);
+    try {
+      await customerApi.updateMyProfile(profileData);
+      setProfileSuccess('Saved addresses & corporate details updated successfully!');
+    } catch (err: any) {
+      setProfileError(err.response?.data?.detail || 'Failed to update customer details');
+    } finally {
+      setProfileLoading(false);
     }
   };
 
@@ -158,6 +183,88 @@ export const ProfilePage: React.FC = () => {
             </button>
           </form>
         </div>
+
+        {/* Customer Address Book & Corporate Settings */}
+        {user.role === 'CUSTOMER' && (
+          <div className="md:col-span-12 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+              <MapPin className="w-4 h-4 text-indigo-600" />
+              <h3 className="font-bold text-slate-900 text-sm">Customer Address Book & Billing Profile</h3>
+            </div>
+
+            {profileError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-center gap-2 text-xs text-rose-700">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{profileError}</span>
+              </div>
+            )}
+
+            {profileSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center gap-2 text-xs text-emerald-700">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>{profileSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleProfileSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-slate-700 mb-1">Company / Business Name</label>
+                  <input
+                    type="text"
+                    value={profileData.company_name}
+                    onChange={(e) => setProfileData({ ...profileData, company_name: e.target.value })}
+                    placeholder="e.g. Apex Logistical Solutions LLP"
+                    className="w-full px-3 py-2 border rounded-xl text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-slate-700 mb-1">GST Identification Number (GSTIN)</label>
+                  <input
+                    type="text"
+                    value={profileData.gst_number}
+                    onChange={(e) => setProfileData({ ...profileData, gst_number: e.target.value })}
+                    placeholder="e.g. 27AAAAA0000A1Z5"
+                    className="w-full px-3 py-2 border rounded-xl text-xs uppercase"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase text-slate-700 mb-1">Default Pickup Address</label>
+                <textarea
+                  rows={2}
+                  value={profileData.default_pickup_address}
+                  onChange={(e) => setProfileData({ ...profileData, default_pickup_address: e.target.value })}
+                  placeholder="Primary warehouse or doorstep pickup address for pre-filling booking forms..."
+                  className="w-full px-3 py-2 border rounded-xl text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase text-slate-700 mb-1">Default Delivery / Return Address</label>
+                <textarea
+                  rows={2}
+                  value={profileData.default_delivery_address}
+                  onChange={(e) => setProfileData({ ...profileData, default_delivery_address: e.target.value })}
+                  placeholder="Primary destination or return address..."
+                  className="w-full px-3 py-2 border rounded-xl text-xs"
+                />
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={profileLoading}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md transition-all inline-flex items-center gap-2"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{profileLoading ? 'Saving Address Book...' : 'Save Customer Details'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
       </div>
     </div>
   );

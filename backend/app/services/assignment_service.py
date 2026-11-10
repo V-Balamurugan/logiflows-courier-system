@@ -276,3 +276,179 @@ class AssignmentService:
         db.commit()
         db.refresh(assignment)
         return assignment
+
+    @staticmethod
+    def get_assignment(db: Session, current_user: User, assignment_id: int) -> DeliveryAssignment:
+        assignment = db.query(DeliveryAssignment).filter(DeliveryAssignment.id == assignment_id).first()
+        if not assignment:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+
+        if current_user.role != UserRole.SUPER_ADMIN:
+            if not current_user.organization_id:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+            emp_org = assignment.employee.organization_id if assignment.employee else None
+            if emp_org != current_user.organization_id:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+
+        if current_user.role == UserRole.DELIVERY_AGENT and assignment.employee_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
+
+        return assignment
+
+    @staticmethod
+    def cancel_assignment(
+        db: Session,
+        current_user: User,
+        assignment_id: int,
+        cancellation_reason: str
+    ) -> DeliveryAssignment:
+        """
+        Cancels an active delivery assignment, restores resources (vehicle, employee slot),
+        and records state-machine history.
+        """
+        assignment = AssignmentService.get_assignment(db, current_user, assignment_id)
+
+        if current_user.role in [UserRole.DELIVERY_AGENT, UserRole.CUSTOMER]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: Only managers or admins can cancel assignments"
+            )
+
+        if assignment.status in [AssignmentStatus.COMPLETED, AssignmentStatus.CANCELLED]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot cancel assignment with status '{assignment.status.value}'"
+            )
+
+        assignment.status = AssignmentStatus.CANCELLED
+        assignment.completed_at = datetime.now(timezone.utc)
+        assignment.notes = cancellation_reason
+
+        # Restore vehicle to AVAILABLE
+        if assignment.vehicle:
+            assignment.vehicle.status = VehicleStatus.AVAILABLE
+
+        # Revert parcel state
+        parcel = assignment.parcel
+        if parcel and parcel.delivery_status == ParcelStatus.OUT_FOR_DELIVERY:
+            target_status = ParcelStatus.AT_DESTINATION_BRANCH if assignment.assignment_type == AssignmentType.LAST_MILE else ParcelStatus.BOOKED
+            ShipmentStateMachine.transition(
+                db=db,
+                current_user=current_user,
+                parcel=parcel,
+                to_status=target_status,
+                remarks=f"Assignment cancelled: {cancellation_reason}. Restored to hub queue.",
+                location_name="Hub Inventory",
+                branch_id=current_user.branch_id,
+                source="ASSIGNMENT_CANCELLATION"
+            )
+
+        db.commit()
+        db.refresh(assignment)
+        return assignment
+
+    @staticmethod
+    def get_dispatch_suggestions(
+        db: Session,
+        current_user: User,
+        parcel_id: int
+    ):
+        from app.models.branch import Branch
+        from app.schemas.assignment import (
+            DispatchSuggestionsResponse,
+            EmployeeSuggestion,
+            VehicleSuggestion
+        )
+
+        parcel = db.query(Parcel).filter(Parcel.id == parcel_id).first()
+        if not parcel:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parcel not found")
+
+        # Determine relevant branch
+        branch_id = parcel.dest_branch_id if parcel.delivery_status in [
+            ParcelStatus.AT_DESTINATION_BRANCH, ParcelStatus.OUT_FOR_DELIVERY
+        ] else parcel.origin_branch_id
+
+        branch = db.query(Branch).filter(Branch.id == branch_id).first()
+        if not branch:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Relevant branch not found")
+
+        parcel_weight = Decimal(str(parcel.weight_kg))
+        parcel_vol = (Decimal(str(parcel.length_cm)) * Decimal(str(parcel.width_cm)) * Decimal(str(parcel.height_cm))) / Decimal("1000000.0")
+
+        # 1. Suggested Employees (sorted by lowest active queue)
+        employees = db.query(User).filter(
+            User.branch_id == branch.id,
+            User.role == UserRole.DELIVERY_AGENT,
+            User.is_active == True
+        ).all()
+
+        emp_suggestions: List[EmployeeSuggestion] = []
+        for emp in employees:
+            active_count = db.query(DeliveryAssignment).filter(
+                DeliveryAssignment.employee_id == emp.id,
+                DeliveryAssignment.status.in_([AssignmentStatus.ASSIGNED, AssignmentStatus.IN_PROGRESS])
+            ).count()
+            utilization = round((active_count / 10.0) * 100, 1)
+            available = active_count < AssignmentService.MAX_AGENT_CONCURRENT_ASSIGNMENTS
+            score = max(0.0, 100.0 - (active_count * 10.0))
+            emp_suggestions.append(EmployeeSuggestion(
+                employee_id=emp.id,
+                full_name=emp.full_name,
+                active_assignments=active_count,
+                max_capacity=10,
+                workload_utilization_pct=utilization,
+                is_available=available,
+                score=score,
+                explanation=f"Agent {emp.full_name} has {active_count}/10 active tasks ({utilization}% workload)"
+            ))
+        emp_suggestions.sort(key=lambda x: x.score, reverse=True)
+
+        # 2. Suggested Vehicles (filtered by capacity and sorted by optimal match)
+        vehicles = db.query(Vehicle).filter(
+            Vehicle.branch_id == branch.id,
+            Vehicle.is_active == True,
+            Vehicle.status == VehicleStatus.AVAILABLE
+        ).all()
+
+        veh_suggestions: List[VehicleSuggestion] = []
+        for veh in vehicles:
+            max_wt = Decimal(str(veh.max_weight_kg))
+            fits_wt = parcel_weight <= max_wt
+            fits_vol = True
+            if veh.max_volume_cbm:
+                fits_vol = parcel_vol <= Decimal(str(veh.max_volume_cbm))
+
+            fits_both = fits_wt and fits_vol
+            util_pct = round(float((parcel_weight / max_wt) * 100), 2) if max_wt > 0 else 0.0
+            score = round(100.0 - abs(50.0 - util_pct), 1) if fits_both else 0.0
+
+            veh_suggestions.append(VehicleSuggestion(
+                vehicle_id=veh.id,
+                vehicle_number=veh.vehicle_number,
+                vehicle_type=veh.vehicle_type.value,
+                max_weight_kg=float(max_wt),
+                max_volume_cbm=float(veh.max_volume_cbm) if veh.max_volume_cbm else None,
+                parcel_weight_kg=float(parcel_weight),
+                weight_utilization_pct=util_pct,
+                fits_capacity=fits_both,
+                score=score,
+                explanation=f"Capacity: {float(max_wt)}kg. Required: {float(parcel_weight)}kg ({util_pct}% utilization). Fits: {'Yes' if fits_both else 'Exceeded'}"
+            ))
+        veh_suggestions.sort(key=lambda x: x.score, reverse=True)
+
+        top_agent = emp_suggestions[0].full_name if emp_suggestions else "None available"
+        top_veh = veh_suggestions[0].vehicle_number if veh_suggestions else "None available"
+        summary = f"Optimal match: Agent {top_agent} with Vehicle {top_veh} based on lowest active queue and payload fit for {float(parcel_weight)}kg consignment."
+
+        return DispatchSuggestionsResponse(
+            parcel_id=parcel.id,
+            tracking_number=parcel.tracking_number,
+            parcel_weight_kg=float(parcel_weight),
+            parcel_volume_cbm=round(float(parcel_vol), 4),
+            branch_id=branch.id,
+            branch_name=branch.branch_name,
+            suggested_employees=emp_suggestions,
+            suggested_vehicles=veh_suggestions,
+            summary_recommendation=summary
+        )

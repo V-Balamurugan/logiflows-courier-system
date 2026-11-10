@@ -265,10 +265,11 @@ export const BookParcelPage: React.FC = () => {
                 <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Sender Name *</label>
                 <input
                   type="text"
+                  name="sender_name"
                   required
                   value={formData.sender_name}
                   onChange={(e) => setFormData({ ...formData, sender_name: e.target.value })}
-                  placeholder="e.g. Acme Corp"
+                  placeholder="Sender full name or company"
                   className="w-full px-3 py-2 border rounded-xl text-xs"
                 />
               </div>

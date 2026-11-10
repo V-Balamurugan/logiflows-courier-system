@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { QrCode, CheckCircle2, AlertCircle, ArrowRight, ShieldCheck, MapPin } from 'lucide-react';
+import { QrCode, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
 import { custodyApi } from '../api';
 import { Badge } from '../components/Badge';
 

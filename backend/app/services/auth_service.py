@@ -5,6 +5,7 @@ from fastapi import HTTPException, status
 import jwt
 
 from app.models.user import User, CustomerProfile
+from app.models.organization import Organization
 from app.models.revoked_token import RevokedToken
 from app.models.enums import UserRole
 from app.core.security import (
@@ -73,6 +74,14 @@ class AuthService:
                 detail="Your account has been deactivated"
             )
 
+        if user.organization_id:
+            org = db.query(Organization).filter(Organization.id == user.organization_id).first()
+            if org and not org.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Organization is suspended or deactivated"
+                )
+
         access_token = create_access_token(subject=user.id, role=user.role.value)
         refresh_token = create_refresh_token(subject=user.id)
 
@@ -114,6 +123,14 @@ class AuthService:
         user = db.query(User).filter(User.id == user_id).first()
         if not user or not user.is_active:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+
+        if user.organization_id:
+            org = db.query(Organization).filter(Organization.id == user.organization_id).first()
+            if org and not org.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Organization is suspended or deactivated"
+                )
 
         # Rotate refresh token: revoke the old one
         if jti:

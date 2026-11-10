@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -20,6 +18,21 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  migration:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: logiflows_migration
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-logiflows_user}:${POSTGRES_PASSWORD:-logiflows_pass}@postgres:5432/${POSTGRES_DB:-logiflows_db}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal-net
 
   backend:
     build:
@@ -43,6 +56,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migration:
+        condition: service_completed_successfully
     networks:
       - internal-net
       - public-net

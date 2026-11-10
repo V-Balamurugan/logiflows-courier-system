@@ -3,7 +3,15 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
-from app.schemas.user import EmployeeCreate, EmployeeUpdate, UserResponse, EmployeeWorkloadResponse
+from app.schemas.user import (
+    EmployeeCreate,
+    EmployeeUpdate,
+    UserResponse,
+    EmployeeWorkloadResponse,
+    EmployeeInviteResponse,
+    AcceptInviteRequest,
+    EmployeeDashboardResponse
+)
 from app.models.user import User
 from app.models.enums import UserRole
 from app.services.employee_service import EmployeeService
@@ -32,8 +40,17 @@ def create_employee(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_branch_manager_or_higher)
 ):
-    """Creates a new employee (Org Admin / Branch Manager)."""
+    """Creates a new employee (enforcing privilege ceiling)."""
     return EmployeeService.create_employee(db, current_user, data)
+
+
+@router.post("/accept-invite")
+def accept_invite(
+    req: AcceptInviteRequest,
+    db: Session = Depends(get_db)
+):
+    """Public endpoint: securely sets employee password using a one-time invitation token."""
+    return EmployeeService.accept_employee_invite(db, req)
 
 
 @router.get("/{employee_id}", response_model=UserResponse)
@@ -53,8 +70,18 @@ def update_employee(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_branch_manager_or_higher)
 ):
-    """Updates employee profile or role."""
+    """Updates employee profile or role (enforcing privilege ceiling)."""
     return EmployeeService.update_employee(db, current_user, employee_id, data)
+
+
+@router.post("/{employee_id}/invite", response_model=EmployeeInviteResponse)
+def create_employee_invite(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_branch_manager_or_higher)
+):
+    """Generates a one-time secure cryptographic invite link for an employee."""
+    return EmployeeService.create_employee_invite(db, current_user, employee_id)
 
 
 @router.get("/{employee_id}/workload", response_model=EmployeeWorkloadResponse)
@@ -66,3 +93,12 @@ def get_employee_workload(
     """Retrieves delivery assignments and workload counters for an employee (tenant-scoped)."""
     return EmployeeService.get_employee_workload(db, current_user, employee_id)
 
+
+@router.get("/{employee_id}/dashboard", response_model=EmployeeDashboardResponse)
+def get_employee_dashboard(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_branch_manager_or_higher)
+):
+    """Retrieves operational delivery dashboard metrics for an employee."""
+    return EmployeeService.get_employee_dashboard(db, current_user, employee_id)

@@ -41,3 +41,36 @@ def test_rate_limiter_middleware_blocks_after_threshold():
             assert "Too many requests" in r_blocked.json()["detail"]
     finally:
         settings.ENVIRONMENT = orig_env
+
+
+def test_rate_limiter_blocks_refresh_and_public_tracking():
+    test_app = FastAPI()
+    test_app.add_middleware(RateLimitMiddleware, max_requests=2, window_seconds=60)
+
+    @test_app.post(f"{settings.API_V1_STR}/auth/refresh")
+    def dummy_refresh():
+        return {"access_token": "token"}
+
+    @test_app.get(f"{settings.API_V1_STR}/tracking/public/{{tracking_number}}")
+    def dummy_public_track(tracking_number: str):
+        return {"tracking_number": tracking_number}
+
+    orig_env = settings.ENVIRONMENT
+    settings.ENVIRONMENT = "production"
+    try:
+        with TestClient(test_app) as tc:
+            # Test refresh rate limit (max 2)
+            assert tc.post(f"{settings.API_V1_STR}/auth/refresh").status_code == 200
+            assert tc.post(f"{settings.API_V1_STR}/auth/refresh").status_code == 200
+            assert tc.post(f"{settings.API_V1_STR}/auth/refresh").status_code == 429
+
+        # Separate client or different IP for public tracking
+        with TestClient(test_app) as tc:
+            headers = {"X-Forwarded-For": "198.51.100.42"}
+            assert tc.get(f"{settings.API_V1_STR}/tracking/public/LOGI-123", headers=headers).status_code == 200
+            assert tc.get(f"{settings.API_V1_STR}/tracking/public/LOGI-456", headers=headers).status_code == 200
+            blocked = tc.get(f"{settings.API_V1_STR}/tracking/public/LOGI-789", headers=headers)
+            assert blocked.status_code == 429
+            assert blocked.json()["detail"] == "Too many requests. Please try again after cooldown."
+    finally:
+        settings.ENVIRONMENT = orig_env
