@@ -22,15 +22,20 @@ def upgrade() -> None:
         batch_op.add_column(sa.Column('version_id', sa.Integer(), server_default='1', nullable=False))
 
     # 2. Add from_status and source to tracking_history
+    parcel_status_enum = sa.Enum(
+        'BOOKED', 'PICKUP_SCHEDULED', 'PICKED_UP', 'AT_ORIGIN_BRANCH', 'IN_TRANSIT',
+        'AT_DESTINATION_BRANCH', 'OUT_FOR_DELIVERY', 'DELIVERED', 'DELIVERY_FAILED',
+        'RETURN_TO_ORIGIN', 'CANCELLED', 'ON_HOLD',
+        name='parcelstatus'
+    )
     with op.batch_alter_table('tracking_history', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('from_status', sa.String(length=50), nullable=True))
+        batch_op.add_column(sa.Column('from_status', parcel_status_enum, nullable=True))
         batch_op.add_column(sa.Column('source', sa.String(length=50), server_default='API', nullable=False))
 
-    # 3. Add is_successful and failure_reason to custody_scans, make parcel_id nullable
+    # 3. Add is_successful and failure_reason to custody_scans
     with op.batch_alter_table('custody_scans', schema=None) as batch_op:
         batch_op.add_column(sa.Column('is_successful', sa.Boolean(), server_default='1', nullable=False))
         batch_op.add_column(sa.Column('failure_reason', sa.String(length=255), nullable=True))
-        batch_op.alter_column('parcel_id', existing_type=sa.Integer(), nullable=True)
 
 
 def downgrade() -> None:
@@ -44,3 +49,4 @@ def downgrade() -> None:
 
     with op.batch_alter_table('parcels', schema=None) as batch_op:
         batch_op.drop_column('version_id')
+

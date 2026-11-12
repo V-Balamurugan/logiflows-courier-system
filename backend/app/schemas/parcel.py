@@ -1,17 +1,41 @@
-from pydantic import BaseModel, EmailStr, Field
+import math
+import re
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 from app.models.enums import ServiceType, PaymentStatus, ParcelStatus
 
+PROHIBITED_CARGO_KEYWORDS = {
+    "explosive", "explosives", "firearm", "firearms", "hazardous",
+    "flammable", "contraband", "radioactive", "biohazard", "ammunition"
+}
+
 
 class ParcelQuoteRequest(BaseModel):
-    weight_kg: float = Field(..., gt=0)
-    length_cm: float = Field(..., gt=0)
-    width_cm: float = Field(..., gt=0)
-    height_cm: float = Field(..., gt=0)
+    weight_kg: float = Field(..., ge=0.01, le=500.0, description="Actual physical weight in kg (0.01 - 500.0)")
+    length_cm: float = Field(..., ge=1.0, le=300.0, description="Package length in cm (1.0 - 300.0)")
+    width_cm: float = Field(..., ge=1.0, le=300.0, description="Package width in cm (1.0 - 300.0)")
+    height_cm: float = Field(..., ge=1.0, le=300.0, description="Package height in cm (1.0 - 300.0)")
     service_type: ServiceType = ServiceType.STANDARD
     origin_pincode: Optional[str] = None
     dest_pincode: Optional[str] = None
+
+    @field_validator("weight_kg", "length_cm", "width_cm", "height_cm")
+    @classmethod
+    def validate_finite(cls, v: float, info) -> float:
+        if math.isnan(v) or math.isinf(v):
+            raise ValueError(f"{info.field_name} must be a valid finite number")
+        return v
+
+    @field_validator("origin_pincode", "dest_pincode")
+    @classmethod
+    def validate_pincodes(cls, v: Optional[str], info) -> Optional[str]:
+        if v:
+            clean = v.strip()
+            if not re.match(r"^\d{4,10}$", clean):
+                raise ValueError(f"{info.field_name} must be a valid 4-10 digit numeric postal code")
+            return clean
+        return v
 
 
 class ParcelQuoteResponse(BaseModel):
@@ -46,12 +70,39 @@ class ParcelCreate(BaseModel):
     receiver_state: str = Field(..., min_length=2)
     receiver_pincode: str = Field(..., min_length=3)
 
-    weight_kg: float = Field(..., gt=0)
-    length_cm: float = Field(..., gt=0)
-    width_cm: float = Field(..., gt=0)
-    height_cm: float = Field(..., gt=0)
+    weight_kg: float = Field(..., ge=0.01, le=500.0, description="Weight in kg (0.01 - 500.0)")
+    length_cm: float = Field(..., ge=1.0, le=300.0, description="Length in cm (1.0 - 300.0)")
+    width_cm: float = Field(..., ge=1.0, le=300.0, description="Width in cm (1.0 - 300.0)")
+    height_cm: float = Field(..., ge=1.0, le=300.0, description="Height in cm (1.0 - 300.0)")
     service_type: ServiceType = ServiceType.STANDARD
+    category: Optional[str] = Field("GENERAL", description="Shipment category: GENERAL, ELECTRONICS, APPAREL, DOCUMENTS")
+    idempotency_key: Optional[str] = Field(None, description="Optional client idempotency key to prevent double-booking")
     notes: Optional[str] = None
+
+    @field_validator("weight_kg", "length_cm", "width_cm", "height_cm")
+    @classmethod
+    def validate_finite(cls, v: float, info) -> float:
+        if math.isnan(v) or math.isinf(v):
+            raise ValueError(f"{info.field_name} must be a valid finite number")
+        return v
+
+    @field_validator("sender_pincode", "receiver_pincode")
+    @classmethod
+    def validate_postal_codes(cls, v: str, info) -> str:
+        clean = v.strip()
+        if not re.match(r"^\d{4,10}$", clean):
+            raise ValueError(f"{info.field_name} must be a valid 4-10 digit numeric postal code")
+        return clean
+
+    @field_validator("notes")
+    @classmethod
+    def validate_prohibited_items(cls, v: Optional[str]) -> Optional[str]:
+        if v:
+            lower = v.lower()
+            for kw in PROHIBITED_CARGO_KEYWORDS:
+                if re.search(rf"\b{kw}\b", lower):
+                    raise ValueError(f"Prohibited cargo declaration detected: '{kw}'. Consignment cannot be booked.")
+        return v
 
 
 class ParcelUpdate(BaseModel):
@@ -59,12 +110,22 @@ class ParcelUpdate(BaseModel):
     receiver_name: Optional[str] = None
     receiver_phone: Optional[str] = None
     receiver_address: Optional[str] = None
+    receiver_city: Optional[str] = None
+    receiver_state: Optional[str] = None
+    receiver_pincode: Optional[str] = None
     notes: Optional[str] = None
-    payment_status: Optional[PaymentStatus] = None
 
 
 class ParcelCancelRequest(BaseModel):
     cancellation_reason: str = Field(..., min_length=3, max_length=500)
+
+
+class PaymentRecordRequest(BaseModel):
+    amount: float = Field(..., gt=0, description="Payment transaction amount")
+    payment_method: str = Field(..., min_length=2, max_length=50, description="Payment method: CARD, UPI, NET_BANKING, CASH")
+    transaction_reference: str = Field(..., min_length=3, max_length=100, description="External transaction ID or receipt reference")
+    is_success: bool = Field(True, description="Whether the payment was successfully captured")
+    failure_reason: Optional[str] = Field(None, description="Reason if payment failed")
 
 
 class TrackingEventResponse(BaseModel):
@@ -114,6 +175,9 @@ class ParcelResponse(BaseModel):
     tax_amount: float
     total_charge: float
     payment_status: PaymentStatus
+    payment_method: Optional[str] = None
+    transaction_reference: Optional[str] = None
+    paid_at: Optional[datetime] = None
 
     delivery_status: ParcelStatus
     current_location: Optional[str] = None
@@ -144,4 +208,3 @@ class PublicParcelResponse(BaseModel):
     expected_delivery_date: Optional[datetime] = None
     actual_delivery_date: Optional[datetime] = None
     tracking_history: List[TrackingEventResponse] = []
-

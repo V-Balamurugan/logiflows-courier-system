@@ -3,7 +3,12 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
-from app.schemas.vehicle import VehicleCreate, VehicleUpdate, VehicleResponse
+from app.schemas.vehicle import (
+    VehicleCreate,
+    VehicleUpdate,
+    VehicleResponse,
+    VehicleMaintenanceRequest
+)
 from app.models.user import User
 from app.models.enums import VehicleStatus
 from app.services.vehicle_service import VehicleService
@@ -53,3 +58,15 @@ def update_vehicle(
     """Updates vehicle status or maintenance state within tenant scope."""
     return VehicleService.update_vehicle(db, vehicle_id, data, current_user=current_user)
 
+
+@router.patch("/{vehicle_id}/maintenance", response_model=VehicleResponse)
+def set_vehicle_maintenance(
+    vehicle_id: int,
+    req: VehicleMaintenanceRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_branch_manager_or_higher)
+):
+    """Places a vehicle into or removes it from maintenance (blocked if actively dispatched)."""
+    return VehicleService.set_maintenance_status(
+        db, vehicle_id, req.is_in_maintenance, notes=req.notes, current_user=current_user
+    )

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { QrCode, CheckCircle2, AlertCircle, ArrowRight, ShieldCheck, MapPin } from 'lucide-react';
+import { QrCode, CheckCircle2, AlertCircle, ArrowRight, ShieldCheck, Hash } from 'lucide-react';
 import { custodyApi } from '../api';
 import { Badge } from '../components/Badge';
 
@@ -55,20 +55,39 @@ export const QRScannerPage: React.FC = () => {
         )}
 
         {result && (
-          <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-2 text-xs">
-            <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-              <span>Custody Verified & Recorded Successfully!</span>
+          <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-3 text-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                <span>Custody Verified & Recorded Successfully!</span>
+              </div>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                Hash Chained
+              </span>
             </div>
-            <p className="text-slate-700">
-              Parcel: <span className="font-bold text-slate-900">{result.tracking_number}</span>
-            </p>
-            <p className="text-slate-700">
-              New Status: <Badge status={result.new_parcel_status} />
-            </p>
+            <div className="grid grid-cols-2 gap-2 text-slate-700">
+              <p>
+                Parcel: <span className="font-bold text-slate-900">{result.tracking_number}</span>
+              </p>
+              <p>
+                New Status: <Badge status={result.new_parcel_status} />
+              </p>
+            </div>
             <p className="text-slate-500 text-[11px]">
               Scanned by: {result.scanned_by_name} at {new Date(result.created_at).toLocaleTimeString()}
             </p>
+            {result.record_hash && (
+              <div className="pt-2 border-t border-emerald-200/60 font-mono text-[10px] text-emerald-900 space-y-0.5">
+                <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-800 font-sans">
+                  <Hash className="w-3 h-3" />
+                  <span>Immutable Ledger Record</span>
+                </div>
+                <p className="truncate text-slate-600">
+                  Record SHA-256: <span className="font-bold text-slate-800">{result.record_hash}</span>
+                </p>
+              </div>
+            )}
           </div>
         )}
 

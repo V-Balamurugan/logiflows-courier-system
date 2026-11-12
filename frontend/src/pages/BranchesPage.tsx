@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { GitBranch, Plus, Search, MapPin, Phone, Mail, Edit2, Trash2 } from 'lucide-react';
+import { GitBranch, Plus, Search, MapPin, Phone, Mail, Edit2, Trash2, BarChart2, Package, Users, Truck } from 'lucide-react';
 import { branchApi } from '../api';
-import { Branch } from '../types';
+import { Branch, BranchDashboard } from '../types';
 import { Modal } from '../components/Modal';
 import { Badge } from '../components/Badge';
 
@@ -10,6 +10,11 @@ export const BranchesPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const [statsModalOpen, setStatsModalOpen] = useState(false);
+  const [selectedStats, setSelectedStats] = useState<BranchDashboard | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+
   const [formData, setFormData] = useState({
     branch_code: '',
     branch_name: '',
@@ -72,8 +77,26 @@ export const BranchesPage: React.FC = () => {
 
   const handleDeactivate = async (id: number) => {
     if (confirm('Are you sure you want to deactivate this branch?')) {
-      await branchApi.delete(id);
-      loadBranches();
+      try {
+        await branchApi.delete(id);
+        loadBranches();
+      } catch (err: any) {
+        alert(err.response?.data?.detail || 'Cannot deactivate branch. Check for active assignments or parcels.');
+      }
+    }
+  };
+
+  const handleViewStats = async (branchId: number) => {
+    setStatsLoading(true);
+    setStatsModalOpen(true);
+    try {
+      const data = await branchApi.getDashboard(branchId);
+      setSelectedStats(data);
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Failed to load branch hub metrics');
+      setStatsModalOpen(false);
+    } finally {
+      setStatsLoading(false);
     }
   };
 
@@ -156,10 +179,17 @@ export const BranchesPage: React.FC = () => {
                   <td className="py-4 px-4">
                     <Badge status={b.operating_status} />
                   </td>
-                  <td className="py-4 px-6 text-right">
+                  <td className="py-4 px-6 text-right space-x-1 whitespace-nowrap">
+                    <button
+                      onClick={() => handleViewStats(b.id)}
+                      className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors inline-flex items-center gap-1"
+                      title="View Hub Metrics"
+                    >
+                      <BarChart2 className="w-4 h-4" />
+                    </button>
                     <button
                       onClick={() => handleDeactivate(b.id)}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors inline-flex items-center gap-1"
                       title="Deactivate branch"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -305,6 +335,74 @@ export const BranchesPage: React.FC = () => {
             Create Branch
           </button>
         </form>
+      </Modal>
+
+      {/* Branch Hub Metrics Modal */}
+      <Modal
+        isOpen={statsModalOpen}
+        onClose={() => { setStatsModalOpen(false); setSelectedStats(null); }}
+        title="Branch Sorting Hub Metrics"
+      >
+        {statsLoading ? (
+          <div className="py-10 text-center text-slate-400 text-xs">
+            Loading real-time hub statistics...
+          </div>
+        ) : selectedStats ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl">
+              <div>
+                <h4 className="font-bold text-slate-900 text-sm">{selectedStats.branch_name}</h4>
+                <p className="font-mono text-xs text-slate-500">{selectedStats.branch_code}</p>
+              </div>
+              <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                selectedStats.is_active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'
+              }`}>
+                {selectedStats.is_active ? 'Operational Hub' : 'Deactivated'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl">
+                <div className="flex items-center gap-1.5 text-indigo-700 text-xs font-semibold mb-1">
+                  <Package className="w-3.5 h-3.5" />
+                  <span>Total Active Parcels</span>
+                </div>
+                <p className="text-xl font-extrabold text-indigo-950">{selectedStats.total_active_parcels}</p>
+                <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                  <span>Origin: {selectedStats.active_parcels_origin}</span>
+                  <span>Dest: {selectedStats.active_parcels_dest}</span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-amber-50/50 border border-amber-100 rounded-xl">
+                <div className="flex items-center gap-1.5 text-amber-700 text-xs font-semibold mb-1">
+                  <BarChart2 className="w-3.5 h-3.5" />
+                  <span>Active Dispatches</span>
+                </div>
+                <p className="text-xl font-extrabold text-amber-950">{selectedStats.active_assignments}</p>
+                <p className="text-[10px] text-slate-500 mt-1">Assigned / In transit</p>
+              </div>
+
+              <div className="p-3 bg-emerald-50/50 border border-emerald-100 rounded-xl">
+                <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-semibold mb-1">
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Staff Headcount</span>
+                </div>
+                <p className="text-xl font-extrabold text-emerald-950">{selectedStats.assigned_employees}</p>
+                <p className="text-[10px] text-slate-500 mt-1">Branch roster</p>
+              </div>
+
+              <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-xl">
+                <div className="flex items-center gap-1.5 text-blue-700 text-xs font-semibold mb-1">
+                  <Truck className="w-3.5 h-3.5" />
+                  <span>Fleet Allocation</span>
+                </div>
+                <p className="text-xl font-extrabold text-blue-950">{selectedStats.assigned_vehicles}</p>
+                <p className="text-[10px] text-slate-500 mt-1">Stationed vehicles</p>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </Modal>
     </div>
   );

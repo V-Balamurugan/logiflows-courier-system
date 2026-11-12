@@ -1,10 +1,13 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+from sqlalchemy import text
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
-from app.database.session import engine, Base, SessionLocal
+from app.database.session import engine, Base, SessionLocal, get_db
 from app.database.init_db import init_db
+from app.middleware.rate_limit import RateLimitMiddleware
 from app.routers import (
     auth,
     organizations,
@@ -16,20 +19,15 @@ from app.routers import (
     vehicles,
     tracking,
     custody,
-    analytics
+    analytics,
+    linehaul,
 )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Ensure database schema is created
-    Base.metadata.create_all(bind=engine)
-    # Seed baseline administrator and organization data
-    db = SessionLocal()
-    try:
-        init_db(db)
-    finally:
-        db.close()
+    # Schema lifecycle is managed via Alembic migrations.
+    # Demo seeding is executed via CLI: python -m app.cli seed-demo
     yield
 
 
@@ -41,6 +39,13 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     docs_url="/docs",
     redoc_url="/redoc"
+)
+
+# Rate Limiting Middleware
+app.add_middleware(
+    RateLimitMiddleware,
+    max_requests=settings.RATE_LIMIT_MAX_REQUESTS,
+    window_seconds=settings.RATE_LIMIT_WINDOW_SECONDS
 )
 
 # CORS Middleware
@@ -64,10 +69,11 @@ app.include_router(vehicles.router, prefix=settings.API_V1_STR)
 app.include_router(tracking.router, prefix=settings.API_V1_STR)
 app.include_router(custody.router, prefix=settings.API_V1_STR)
 app.include_router(analytics.router, prefix=settings.API_V1_STR)
+app.include_router(linehaul.router, prefix=settings.API_V1_STR)
 
 
 @app.get("/", tags=["Health"])
-def health_check():
+def root_status():
     return {
         "status": "online",
         "service": settings.PROJECT_NAME,
@@ -75,3 +81,20 @@ def health_check():
         "docs_url": "/docs"
     }
 
+
+@app.get("/health", tags=["Health"])
+def health_check(response: Response, db: Session = Depends(get_db)):
+    """Active deep health check validating database connectivity."""
+    db_status = "connected"
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as e:
+        db_status = f"unhealthy: {str(e)}"
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
+    return {
+        "status": "healthy" if db_status == "connected" else "degraded",
+        "service": settings.PROJECT_NAME,
+        "database": db_status,
+        "environment": settings.ENVIRONMENT
+    }

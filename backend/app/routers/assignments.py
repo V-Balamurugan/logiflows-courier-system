@@ -3,7 +3,13 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
-from app.schemas.assignment import AssignmentCreate, AssignmentStatusUpdate, AssignmentResponse
+from app.schemas.assignment import (
+    AssignmentCreate,
+    AssignmentStatusUpdate,
+    AssignmentResponse,
+    AssignmentCancelRequest,
+    DispatchSuggestionsResponse
+)
 from app.models.user import User
 from app.models.enums import AssignmentStatus
 from app.services.assignment_service import AssignmentService
@@ -50,6 +56,44 @@ def list_assignments(
     )
 
 
+@router.get("/suggestions/{parcel_id}", response_model=DispatchSuggestionsResponse)
+def get_dispatch_suggestions(
+    parcel_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_branch_manager_or_higher)
+):
+    """
+    Returns explainable dispatch recommendations for a parcel, showing candidate agents'
+    workload utilization and vehicles' payload capacity compatibility.
+    """
+    return AssignmentService.get_dispatch_suggestions(db, current_user, parcel_id)
+
+
+@router.get("/{assignment_id}", response_model=AssignmentResponse)
+def get_assignment(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_staff)
+):
+    """Retrieves assignment details with tenant isolation."""
+    assignment = AssignmentService.get_assignment(db, current_user, assignment_id)
+    return AssignmentResponse(
+        id=assignment.id,
+        parcel_id=assignment.parcel_id,
+        employee_id=assignment.employee_id,
+        vehicle_id=assignment.vehicle_id,
+        assignment_type=assignment.assignment_type,
+        status=assignment.status,
+        notes=assignment.notes,
+        assigned_at=assignment.assigned_at,
+        completed_at=assignment.completed_at,
+        created_at=assignment.created_at,
+        employee_name=assignment.employee.full_name if assignment.employee else None,
+        tracking_number=assignment.parcel.tracking_number if assignment.parcel else None,
+        vehicle_number=assignment.vehicle.vehicle_number if assignment.vehicle else None
+    )
+
+
 @router.put("/{assignment_id}/status", response_model=AssignmentResponse)
 def update_assignment_status(
     assignment_id: int,
@@ -75,3 +119,28 @@ def update_assignment_status(
         vehicle_number=assignment.vehicle.vehicle_number if assignment.vehicle else None
     )
 
+
+@router.post("/{assignment_id}/cancel", response_model=AssignmentResponse)
+def cancel_assignment(
+    assignment_id: int,
+    req: AssignmentCancelRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_branch_manager_or_higher)
+):
+    """Cancels an active delivery assignment, restores vehicle availability, and logs state transition."""
+    assignment = AssignmentService.cancel_assignment(db, current_user, assignment_id, req.reason)
+    return AssignmentResponse(
+        id=assignment.id,
+        parcel_id=assignment.parcel_id,
+        employee_id=assignment.employee_id,
+        vehicle_id=assignment.vehicle_id,
+        assignment_type=assignment.assignment_type,
+        status=assignment.status,
+        notes=assignment.notes,
+        assigned_at=assignment.assigned_at,
+        completed_at=assignment.completed_at,
+        created_at=assignment.created_at,
+        employee_name=assignment.employee.full_name if assignment.employee else None,
+        tracking_number=assignment.parcel.tracking_number if assignment.parcel else None,
+        vehicle_number=assignment.vehicle.vehicle_number if assignment.vehicle else None
+    )

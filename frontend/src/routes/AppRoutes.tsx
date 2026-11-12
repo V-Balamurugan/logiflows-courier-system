@@ -13,6 +13,7 @@ import { BookParcelPage } from '../pages/BookParcelPage';
 import { ParcelsPage } from '../pages/ParcelsPage';
 import { ParcelDetailPage } from '../pages/ParcelDetailPage';
 import { AssignmentsPage } from '../pages/AssignmentsPage';
+import { LinehaulPage } from '../pages/LinehaulPage';
 import { QRScannerPage } from '../pages/QRScannerPage';
 import { BranchesPage } from '../pages/BranchesPage';
 import { EmployeesPage } from '../pages/EmployeesPage';
@@ -35,18 +36,42 @@ export const AppRoutes: React.FC = () => {
       {/* Authenticated Dashboard Pages */}
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
+          {/* Universal authenticated routes */}
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/book-parcel" element={<BookParcelPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
           <Route path="/parcels" element={<ParcelsPage />} />
           <Route path="/parcels/:trackingNumber" element={<ParcelDetailPage />} />
-          <Route path="/assignments" element={<AssignmentsPage />} />
-          <Route path="/qr-scanner" element={<QRScannerPage />} />
-          <Route path="/branches" element={<BranchesPage />} />
-          <Route path="/employees" element={<EmployeesPage />} />
-          <Route path="/customers" element={<CustomersPage />} />
-          <Route path="/vehicles" element={<VehiclesPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
+
+          {/* Booking routes: Admins, Branch Managers, Customers */}
+          <Route
+            element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ORG_ADMIN', 'BRANCH_MANAGER', 'CUSTOMER']} />}
+          >
+            <Route path="/book-parcel" element={<BookParcelPage />} />
+          </Route>
+
+          {/* Operational routes: Admins, Branch Managers, Delivery Agents */}
+          <Route
+            element={
+              <ProtectedRoute
+                allowedRoles={['SUPER_ADMIN', 'ORG_ADMIN', 'BRANCH_MANAGER', 'DELIVERY_AGENT']}
+              />
+            }
+          >
+            <Route path="/assignments" element={<AssignmentsPage />} />
+            <Route path="/linehaul" element={<LinehaulPage />} />
+            <Route path="/qr-scanner" element={<QRScannerPage />} />
+          </Route>
+
+          {/* Management routes: Super Admin, Org Admin, Branch Manager */}
+          <Route
+            element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ORG_ADMIN', 'BRANCH_MANAGER']} />}
+          >
+            <Route path="/branches" element={<BranchesPage />} />
+            <Route path="/employees" element={<EmployeesPage />} />
+            <Route path="/customers" element={<CustomersPage />} />
+            <Route path="/vehicles" element={<VehiclesPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
+          </Route>
         </Route>
       </Route>
 
@@ -55,4 +80,3 @@ export const AppRoutes: React.FC = () => {
     </Routes>
   );
 };
-

@@ -74,3 +74,22 @@ This document defines the Role-Based Access Control (RBAC) and Multi-Tenant Isol
 | **GET** | `/api/v1/custody/{tracking_no}/history` | Staff | Audit chain for user's organization parcel | `404 Not Found` |
 | **GET** | `/api/v1/analytics/dashboard` | All Roles | Metric cards and charts scoped to role & tenant | Isolated statistics |
 | **GET** | `/api/v1/analytics/export/csv` | Staff | Exports parcel rows scoped to organization | Scoped CSV download |
+| **POST** | `/api/v1/linehaul/bags` | Branch Manager, Org Admin, Super Admin | BM scoped to `origin_branch_id` in own org | `404 Not Found` / `403` |
+| **GET** | `/api/v1/linehaul/bags` | Branch Manager, Org Admin, Super Admin | Scoped to organization (and origin/dest branch for BM) | Filtered list |
+| **GET** | `/api/v1/linehaul/bags/{id}` | Branch Manager, Org Admin, Super Admin | Must belong to user's organization/branch | `404 Not Found` |
+| **POST** | `/api/v1/linehaul/bags/{id}/parcels` | Branch Manager, Org Admin, Super Admin | Origin branch operator or Org/Super Admin | `404 Not Found` / `403` |
+| **DELETE** | `/api/v1/linehaul/bags/{id}/parcels/{parcel_id}` | Branch Manager, Org Admin, Super Admin | Origin branch operator or Org/Super Admin | `404 Not Found` / `403` |
+| **POST** | `/api/v1/linehaul/bags/{id}/seal` | Branch Manager, Org Admin, Super Admin | Origin branch operator; non-empty OPEN bag | `404 Not Found` / `403` |
+| **POST** | `/api/v1/linehaul/bags/{id}/debag` | Branch Manager, Org Admin, Super Admin | Destination branch operator; RECEIVED bag only | `404 Not Found` / `403` |
+| **POST** | `/api/v1/linehaul/manifests` | Branch Manager, Org Admin, Super Admin | BM scoped to `origin_branch_id` in own org | `404 Not Found` / `403` |
+| **GET** | `/api/v1/linehaul/manifests` | Staff | Scoped to org (BM: origin/dest branch; Agent: driver_id) | Filtered list |
+| **GET** | `/api/v1/linehaul/manifests/{id}` | Staff | Must match org/branch/assigned driver scope | `404 Not Found` |
+| **POST** | `/api/v1/linehaul/manifests/{id}/items` | Branch Manager, Org Admin, Super Admin | Origin branch operator; DRAFT manifest | `404 Not Found` / `403` |
+| **POST** | `/api/v1/linehaul/manifests/{id}/seal` | Branch Manager, Org Admin, Super Admin | Origin branch operator; non-empty DRAFT manifest | `404 Not Found` / `403` |
+| **POST** | `/api/v1/linehaul/manifests/{id}/dispatch` | Branch Manager, Org Admin, Super Admin | Origin branch operator; atomic vehicle CAS lock | `404 Not Found` / `409` |
+| **POST** | `/api/v1/linehaul/manifests/{id}/arrive` | Assigned Driver, Dest BM, Org Admin, Super Admin | Assigned `driver_id` or destination branch operator | `404 Not Found` / `403` |
+| **POST** | `/api/v1/linehaul/manifests/{id}/reconcile` | Branch Manager, Org Admin, Super Admin | Destination branch operator; inward tally + hold/discrepancies | `404 Not Found` / `403` |
+| **POST** | `/api/v1/linehaul/manifests/{id}/cancel` | Branch Manager, Org Admin, Super Admin | Origin branch operator; DRAFT/SEALED only | `404 Not Found` / `409` |
+| **GET** | `/api/v1/linehaul/discrepancies` | Branch Manager, Org Admin, Super Admin | Scoped to org (and origin/dest branch for BM) | Filtered list |
+| **POST** | `/api/v1/linehaul/discrepancies` | Branch Manager, Org Admin, Super Admin | Manifest within org/branch after dispatch | `404 Not Found` / `409` |
+| **PATCH** | `/api/v1/linehaul/discrepancies/{id}` | Branch Manager, Org Admin, Super Admin | Scoped to org/branch; optional hold release to dest | `404 Not Found` |

@@ -69,12 +69,16 @@ export const VehiclesPage: React.FC = () => {
   };
 
   const handleToggleMaintenance = async (v: Vehicle) => {
-    const nextStatus = v.status === 'MAINTENANCE' ? 'AVAILABLE' : 'MAINTENANCE';
+    const willBeInMaintenance = v.status !== 'MAINTENANCE';
     try {
-      await vehicleApi.update(v.id, { status: nextStatus });
+      await vehicleApi.setMaintenance(
+        v.id,
+        willBeInMaintenance,
+        willBeInMaintenance ? 'Scheduled inspection / routine servicing' : undefined
+      );
       loadData();
-    } catch (err) {
-      alert('Error updating status');
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Error updating vehicle maintenance status');
     }
   };
 

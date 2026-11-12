@@ -25,7 +25,9 @@ class ServiceType(str, Enum):
 class PaymentStatus(str, Enum):
     PENDING = "PENDING"
     PAID = "PAID"
+    FAILED = "FAILED"
     REFUNDED = "REFUNDED"
+    CANCELLED = "CANCELLED"
 
 
 class ParcelStatus(str, Enum):
@@ -68,6 +70,7 @@ class AssignmentStatus(str, Enum):
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
     CANCELLED = "CANCELLED"
+    FAILED = "FAILED"
 
 
 class ScanType(str, Enum):
@@ -77,4 +80,49 @@ class ScanType(str, Enum):
     DEST_INWARD = "DEST_INWARD"
     OUT_FOR_DELIVERY = "OUT_FOR_DELIVERY"
     DELIVERY_CONFIRMATION = "DELIVERY_CONFIRMATION"
+
+
+class ManifestStatus(str, Enum):
+    DRAFT = "DRAFT"
+    SEALED = "SEALED"
+    IN_TRANSIT = "IN_TRANSIT"
+    ARRIVED = "ARRIVED"
+    RECONCILED = "RECONCILED"
+    CANCELLED = "CANCELLED"
+
+
+class BagStatus(str, Enum):
+    OPEN = "OPEN"
+    SEALED = "SEALED"
+    IN_TRANSIT = "IN_TRANSIT"
+    RECEIVED = "RECEIVED"
+    OPENED_AT_DEST = "OPENED_AT_DEST"
+
+
+class ManifestItemStatus(str, Enum):
+    EXPECTED = "EXPECTED"
+    RECEIVED = "RECEIVED"
+    MISSING = "MISSING"
+    DAMAGED = "DAMAGED"
+
+
+class DiscrepancyType(str, Enum):
+    MISSING = "MISSING"
+    DAMAGED = "DAMAGED"
+    EXCESS = "EXCESS"
+    SEAL_BROKEN = "SEAL_BROKEN"
+
+
+class DiscrepancySeverity(str, Enum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+class DiscrepancyStatus(str, Enum):
+    OPEN = "OPEN"
+    INVESTIGATING = "INVESTIGATING"
+    RESOLVED = "RESOLVED"
+
 

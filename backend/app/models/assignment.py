@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SQLEnum, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SQLEnum, Text, Index, text
 from sqlalchemy.orm import relationship
 from app.database.session import Base
 from app.models.enums import AssignmentType, AssignmentStatus
@@ -7,6 +7,15 @@ from app.models.enums import AssignmentType, AssignmentStatus
 
 class DeliveryAssignment(Base):
     __tablename__ = "delivery_assignments"
+    __table_args__ = (
+        Index(
+            "uq_active_parcel_assignment",
+            "parcel_id",
+            unique=True,
+            postgresql_where=text("status IN ('ASSIGNED', 'IN_PROGRESS')"),
+            sqlite_where=text("status IN ('ASSIGNED', 'IN_PROGRESS')")
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     parcel_id = Column(Integer, ForeignKey("parcels.id", ondelete="CASCADE"), nullable=False, index=True)

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, Search, Phone, Mail, GitBranch, Briefcase } from 'lucide-react';
+import { Users, UserPlus, Search, Phone, Mail, GitBranch, Briefcase, KeyRound, Copy, Check } from 'lucide-react';
 import { employeeApi, branchApi } from '../api';
-import { User, Branch } from '../types';
+import { User, Branch, EmployeeInviteResponse } from '../types';
 import { Modal } from '../components/Modal';
 import { Badge } from '../components/Badge';
 
@@ -11,6 +11,12 @@ export const EmployeesPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [inviteDetails, setInviteDetails] = useState<EmployeeInviteResponse | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
@@ -39,6 +45,29 @@ export const EmployeesPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  const handleGenerateInvite = async (empId: number) => {
+    setInviteLoading(true);
+    setInviteModalOpen(true);
+    setCopied(false);
+    try {
+      const res = await employeeApi.invite(empId);
+      setInviteDetails(res);
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Failed to generate one-time invite token');
+      setInviteModalOpen(false);
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const handleCopyInvite = () => {
+    if (inviteDetails?.invite_url) {
+      navigator.clipboard.writeText(inviteDetails.invite_url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,10 +175,18 @@ export const EmployeesPage: React.FC = () => {
                     <td className="py-4 px-4 text-slate-600">
                       {emp.phone || 'N/A'}
                     </td>
-                    <td className="py-4 px-6 text-right">
+                    <td className="py-4 px-6 text-right space-x-2 whitespace-nowrap">
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                         Active
                       </span>
+                      <button
+                        onClick={() => handleGenerateInvite(emp.id)}
+                        className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-semibold text-[11px] transition-colors inline-flex items-center gap-1"
+                        title="Generate one-time invite token link"
+                      >
+                        <KeyRound className="w-3 h-3" />
+                        <span>Invite Link</span>
+                      </button>
                     </td>
                   </tr>
                 );
@@ -248,6 +285,60 @@ export const EmployeesPage: React.FC = () => {
             Create Staff Profile
           </button>
         </form>
+      </Modal>
+
+      {/* One-Time Invite Token Modal */}
+      <Modal
+        isOpen={inviteModalOpen}
+        onClose={() => { setInviteModalOpen(false); setInviteDetails(null); }}
+        title="One-Time Staff Activation Token"
+      >
+        {inviteLoading ? (
+          <div className="py-8 text-center text-slate-400 text-xs">
+            Generating cryptographically signed invite link...
+          </div>
+        ) : inviteDetails ? (
+          <div className="space-y-4">
+            <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-xs text-indigo-900">
+              <p className="font-semibold">Cryptographic Single-Use Invitation</p>
+              <p className="text-[11px] text-indigo-700 mt-0.5">
+                This token is valid for {inviteDetails.expires_in_hours} hours. Once consumed to activate credentials, it will be automatically revoked.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase text-slate-700 mb-1">
+                Activation Link ({inviteDetails.email})
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={inviteDetails.invite_url}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-700 select-all"
+                />
+                <button
+                  type="button"
+                  onClick={handleCopyInvite}
+                  className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 shrink-0"
+                >
+                  {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  <span>{copied ? 'Copied!' : 'Copy'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => { setInviteModalOpen(false); setInviteDetails(null); }}
+                className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        ) : null}
       </Modal>
     </div>
   );

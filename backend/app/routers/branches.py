@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
-from app.schemas.branch import BranchCreate, BranchUpdate, BranchResponse
+from app.schemas.branch import BranchCreate, BranchUpdate, BranchResponse, BranchDashboardResponse
 from app.models.user import User
 from app.services.branch_service import BranchService
 from app.dependencies.auth_deps import require_org_admin, get_current_user
@@ -52,6 +52,16 @@ def update_branch(
 ):
     """Updates branch metadata and operating status within user's organization."""
     return BranchService.update_branch(db, branch_id, data, current_user=current_user)
+
+
+@router.get("/{branch_id}/dashboard", response_model=BranchDashboardResponse)
+def get_branch_dashboard(
+    branch_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Returns operational dashboard metrics for a branch."""
+    return BranchService.get_branch_dashboard(db, branch_id, current_user=current_user)
 
 
 @router.delete("/{branch_id}")

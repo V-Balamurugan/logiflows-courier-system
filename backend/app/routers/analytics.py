@@ -70,7 +70,7 @@ def export_parcels_csv(
     ])
 
     for p in parcels:
-        writer.writerow([
+        row = [
             p.tracking_number,
             p.booking_date.strftime("%Y-%m-%d %H:%M"),
             p.delivery_status.value,
@@ -82,7 +82,13 @@ def export_parcels_csv(
             p.weight_kg,
             p.total_charge,
             p.payment_status.value
-        ])
+        ]
+        # Neutralize CSV formula injection (=, +, -, @, \t, \r) by prepending single quote
+        sanitized_row = [
+            f"'{cell}" if isinstance(cell, str) and cell and cell[0] in ("=", "+", "-", "@", "\t", "\r") else cell
+            for cell in row
+        ]
+        writer.writerow(sanitized_row)
 
     output.seek(0)
     return Response(

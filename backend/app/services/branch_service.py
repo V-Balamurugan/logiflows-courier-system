@@ -5,22 +5,32 @@ from fastapi import HTTPException, status
 from app.models.organization import Organization
 from app.models.branch import Branch
 from app.models.user import User
-from app.models.enums import UserRole
+from app.models.vehicle import Vehicle
+from app.models.parcel import Parcel
+from app.models.assignment import DeliveryAssignment
+from app.models.linehaul import LinehaulManifest
+from app.models.enums import UserRole, ParcelStatus, AssignmentStatus, ManifestStatus
 from app.schemas.organization import OrganizationCreate, OrganizationUpdate
-from app.schemas.branch import BranchCreate, BranchUpdate
+from app.schemas.branch import BranchCreate, BranchUpdate, BranchDashboardResponse
+
+TERMINAL_PARCEL_STATUSES = [
+    ParcelStatus.DELIVERED,
+    ParcelStatus.CANCELLED,
+    ParcelStatus.RETURN_TO_ORIGIN
+]
 
 
 class BranchService:
     @staticmethod
     def create_organization(db: Session, data: OrganizationCreate) -> Organization:
-        existing = db.query(Organization).filter(Organization.code == data.code.upper()).first()
+        existing = db.query(Organization).filter(Organization.code == data.code.strip().upper()).first()
         if existing:
             raise HTTPException(status_code=400, detail="Organization code already exists")
         
         org = Organization(
-            name=data.name,
-            code=data.code.upper(),
-            contact_email=data.contact_email,
+            name=data.name.strip(),
+            code=data.code.strip().upper(),
+            contact_email=data.contact_email.strip().lower(),
             contact_phone=data.contact_phone,
             address=data.address,
             is_active=data.is_active
@@ -40,21 +50,38 @@ class BranchService:
         if not org_id:
             raise HTTPException(status_code=400, detail="Organization ID is required")
 
-        existing_code = db.query(Branch).filter(Branch.branch_code == data.branch_code.upper()).first()
+        clean_code = data.branch_code.strip().upper()
+
+        # Branch codes unique per organization
+        existing_in_org = db.query(Branch).filter(
+            Branch.organization_id == org_id,
+            Branch.branch_code == clean_code
+        ).first()
+        if existing_in_org:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Branch code '{clean_code}' is already registered in this organization"
+            )
+
+        # Global uniqueness check
+        existing_code = db.query(Branch).filter(Branch.branch_code == clean_code).first()
         if existing_code:
-            raise HTTPException(status_code=400, detail="Branch code already in use")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Branch code '{clean_code}' is already registered"
+            )
 
         branch = Branch(
             organization_id=org_id,
-            branch_code=data.branch_code.upper(),
-            branch_name=data.branch_name,
-            address=data.address,
-            pincode=data.pincode,
-            city=data.city,
-            state=data.state,
-            country=data.country,
-            contact_email=data.contact_email,
-            contact_phone=data.contact_phone,
+            branch_code=clean_code,
+            branch_name=data.branch_name.strip(),
+            address=data.address.strip(),
+            pincode=data.pincode.strip(),
+            city=data.city.strip(),
+            state=data.state.strip(),
+            country=data.country.strip(),
+            contact_email=data.contact_email.strip().lower(),
+            contact_phone=data.contact_phone.strip(),
             latitude=data.latitude,
             longitude=data.longitude,
             operating_status=data.operating_status,
@@ -75,7 +102,13 @@ class BranchService:
     ) -> List[Branch]:
         query = db.query(Branch)
         
-        if current_user and current_user.role != UserRole.SUPER_ADMIN and current_user.organization_id:
+        # Branch Managers can strictly only see their assigned branch
+        if current_user and current_user.role == UserRole.BRANCH_MANAGER:
+            if current_user.branch_id:
+                query = query.filter(Branch.id == current_user.branch_id)
+            else:
+                return []
+        elif current_user and current_user.role != UserRole.SUPER_ADMIN and current_user.organization_id:
             query = query.filter(Branch.organization_id == current_user.organization_id)
 
         if search:
@@ -99,6 +132,9 @@ class BranchService:
         if current_user and current_user.role != UserRole.SUPER_ADMIN:
             if not current_user.organization_id or branch.organization_id != current_user.organization_id:
                 raise HTTPException(status_code=404, detail="Branch not found")
+            if current_user.role == UserRole.BRANCH_MANAGER and current_user.branch_id:
+                if branch.id != current_user.branch_id:
+                    raise HTTPException(status_code=404, detail="Branch not found")
         return branch
 
     @staticmethod
@@ -112,8 +148,97 @@ class BranchService:
 
     @staticmethod
     def delete_branch(db: Session, branch_id: int, current_user: Optional[User] = None) -> bool:
+        """
+        Soft-deactivates branch.
+        Fails with HTTP 409 Conflict if active parcels or active assignments exist.
+        """
         branch = BranchService.get_branch_by_id(db, branch_id, current_user)
+
+        # 1. Check for active parcels in progress at or routed through this branch
+        active_parcels = db.query(Parcel).filter(
+            (Parcel.origin_branch_id == branch.id) | (Parcel.dest_branch_id == branch.id),
+            ~Parcel.delivery_status.in_(TERMINAL_PARCEL_STATUSES)
+        ).count()
+
+        if active_parcels > 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Cannot deactivate branch: {active_parcels} active parcel(s) are currently in progress or routed through this branch"
+            )
+
+        # 2. Check for active assignments by personnel stationed at this branch
+        active_assignments = db.query(DeliveryAssignment).join(
+            User, DeliveryAssignment.employee_id == User.id
+        ).filter(
+            User.branch_id == branch.id,
+            DeliveryAssignment.status.in_([AssignmentStatus.ASSIGNED, AssignmentStatus.IN_PROGRESS])
+        ).count()
+
+        if active_assignments > 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Cannot deactivate branch: {active_assignments} active delivery assignment(s) are in progress by personnel stationed at this branch"
+            )
+
+        # 3. Check for active linehaul manifests originating from or destined to this branch
+        active_manifests = db.query(LinehaulManifest).filter(
+            (LinehaulManifest.origin_branch_id == branch.id) | (LinehaulManifest.dest_branch_id == branch.id),
+            LinehaulManifest.status.in_([
+                ManifestStatus.DRAFT,
+                ManifestStatus.SEALED,
+                ManifestStatus.IN_TRANSIT,
+                ManifestStatus.ARRIVED,
+            ])
+        ).count()
+
+        if active_manifests > 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Cannot deactivate branch: {active_manifests} active linehaul transfer manifest(s) involve this branch"
+            )
+
         branch.is_active = False
         db.commit()
         return True
 
+    @staticmethod
+    def get_branch_dashboard(
+        db: Session,
+        branch_id: int,
+        current_user: Optional[User] = None
+    ) -> BranchDashboardResponse:
+        branch = BranchService.get_branch_by_id(db, branch_id, current_user)
+
+        assigned_employees = db.query(User).filter(
+            User.branch_id == branch.id,
+            User.role != UserRole.CUSTOMER,
+            User.is_active == True
+        ).count()
+
+        stationed_vehicles = db.query(Vehicle).filter(
+            Vehicle.branch_id == branch.id,
+            Vehicle.is_active == True
+        ).count()
+
+        active_inbound = db.query(Parcel).filter(
+            Parcel.dest_branch_id == branch.id,
+            ~Parcel.delivery_status.in_(TERMINAL_PARCEL_STATUSES)
+        ).count()
+
+        active_outbound = db.query(Parcel).filter(
+            Parcel.origin_branch_id == branch.id,
+            ~Parcel.delivery_status.in_(TERMINAL_PARCEL_STATUSES)
+        ).count()
+
+        return BranchDashboardResponse(
+            branch_id=branch.id,
+            branch_code=branch.branch_code,
+            branch_name=branch.branch_name,
+            city=branch.city,
+            operating_status=branch.operating_status,
+            is_active=branch.is_active,
+            total_assigned_employees=assigned_employees,
+            stationed_vehicles=stationed_vehicles,
+            active_inbound_parcels=active_inbound,
+            active_outbound_parcels=active_outbound
+        )

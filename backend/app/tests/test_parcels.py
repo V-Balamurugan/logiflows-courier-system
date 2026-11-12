@@ -103,5 +103,5 @@ def test_cancel_booked_parcel(client, customer_headers):
     )
     assert cancel_resp.status_code == 200
     assert cancel_resp.json()["delivery_status"] == "CANCELLED"
-    assert cancel_resp.json()["payment_status"] == "REFUNDED"
+    assert cancel_resp.json()["payment_status"] == "CANCELLED"
 

@@ -9,7 +9,7 @@ class CustodyScan(Base):
     __tablename__ = "custody_scans"
 
     id = Column(Integer, primary_key=True, index=True)
-    parcel_id = Column(Integer, ForeignKey("parcels.id", ondelete="CASCADE"), nullable=True, index=True)
+    parcel_id = Column(Integer, ForeignKey("parcels.id", ondelete="CASCADE"), nullable=False, index=True)
     scanned_by_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
     branch_id = Column(Integer, ForeignKey("branches.id", ondelete="SET NULL"), nullable=True)
     scan_type = Column(SQLEnum(ScanType), nullable=False)
@@ -18,6 +18,8 @@ class CustodyScan(Base):
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
     notes = Column(Text, nullable=True)
+    previous_hash = Column(String(64), nullable=True)
+    record_hash = Column(String(64), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
 
     parcel = relationship("Parcel", back_populates="custody_scans")

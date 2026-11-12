@@ -229,3 +229,4 @@ def test_transaction_rollback_atomicity(db_session, tracking_test_data):
     # Verify no orphan tracking event was persisted
     post_count = db_session.query(TrackingHistory).filter(TrackingHistory.parcel_id == parcel.id).count()
     assert post_count == initial_count
+

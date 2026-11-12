@@ -10,6 +10,12 @@ from app.models.enums import (
     AssignmentType,
     AssignmentStatus,
     ScanType,
+    ManifestStatus,
+    BagStatus,
+    ManifestItemStatus,
+    DiscrepancyType,
+    DiscrepancySeverity,
+    DiscrepancyStatus,
 )
 from app.models.organization import Organization
 from app.models.branch import Branch
@@ -20,6 +26,13 @@ from app.models.assignment import DeliveryAssignment
 from app.models.tracking import TrackingHistory
 from app.models.custody import CustodyScan
 from app.models.revoked_token import RevokedToken
+from app.models.linehaul import (
+    LinehaulManifest,
+    ConsolidationBag,
+    BagItem,
+    LinehaulManifestItem,
+    TransferDiscrepancy,
+)
 
 __all__ = [
     "Base",
@@ -33,6 +46,12 @@ __all__ = [
     "AssignmentType",
     "AssignmentStatus",
     "ScanType",
+    "ManifestStatus",
+    "BagStatus",
+    "ManifestItemStatus",
+    "DiscrepancyType",
+    "DiscrepancySeverity",
+    "DiscrepancyStatus",
     "Organization",
     "Branch",
     "User",
@@ -43,5 +62,10 @@ __all__ = [
     "TrackingHistory",
     "CustodyScan",
     "RevokedToken",
+    "LinehaulManifest",
+    "ConsolidationBag",
+    "BagItem",
+    "LinehaulManifestItem",
+    "TransferDiscrepancy",
 ]
 

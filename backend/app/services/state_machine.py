@@ -117,6 +117,10 @@ TRANSITION_TABLE: Dict[Tuple[ParcelStatus, ParcelStatus], TransitionRule] = {
         allowed_roles={UserRole.DELIVERY_AGENT, UserRole.BRANCH_MANAGER, UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN},
         description="Proof of delivery confirmed; successfully delivered."
     ),
+    (ParcelStatus.OUT_FOR_DELIVERY, ParcelStatus.AT_DESTINATION_BRANCH): TransitionRule(
+        allowed_roles={UserRole.DELIVERY_AGENT, UserRole.BRANCH_MANAGER, UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN},
+        description="Delivery run cancelled or returned to destination hub."
+    ),
     (ParcelStatus.OUT_FOR_DELIVERY, ParcelStatus.DELIVERY_FAILED): TransitionRule(
         allowed_roles={UserRole.DELIVERY_AGENT, UserRole.BRANCH_MANAGER, UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN},
         description="Delivery attempt failed (consignee unavailable / wrong address)."
@@ -190,7 +194,8 @@ class ShipmentStateMachine:
         longitude: Optional[float] = None,
         source: str = "API",
         cancellation_reason: Optional[str] = None,
-        expected_version: Optional[int] = None
+        expected_version: Optional[int] = None,
+        commit: bool = True,
     ) -> Parcel:
         from_status = parcel.delivery_status
 
@@ -308,6 +313,45 @@ class ShipmentStateMachine:
                 if active_assign.vehicle:
                     active_assign.vehicle.status = VehicleStatus.AVAILABLE
 
-        db.commit()
-        db.refresh(parcel)
+        if commit:
+            db.commit()
+            db.refresh(parcel)
+            ShipmentStateMachine.broadcast_milestone(
+                tracking_number=parcel.tracking_number,
+                to_status=to_status,
+                location=loc_desc,
+                latitude=latitude,
+                longitude=longitude,
+                remarks=remarks or rule.description,
+                timestamp=now,
+            )
+        else:
+            db.flush()
+            db.refresh(parcel)
+
         return parcel
+
+    @staticmethod
+    def broadcast_milestone(
+        tracking_number: str,
+        to_status: ParcelStatus,
+        location: str,
+        remarks: str,
+        latitude: Optional[float] = None,
+        longitude: Optional[float] = None,
+        timestamp: Optional[datetime] = None,
+    ) -> None:
+        try:
+            from app.services.broadcaster import milestone_broadcaster
+            ts = timestamp or datetime.now(timezone.utc)
+            milestone_broadcaster.broadcast(tracking_number, {
+                "tracking_number": tracking_number,
+                "status": to_status.value,
+                "location": location,
+                "latitude": latitude,
+                "longitude": longitude,
+                "remarks": remarks,
+                "timestamp": ts.isoformat()
+            })
+        except Exception:
+            pass

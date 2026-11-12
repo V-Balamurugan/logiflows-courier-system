@@ -13,6 +13,7 @@ import {
   User,
   LogOut,
   SendHorizontal,
+  Boxes,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Badge } from './Badge';
@@ -28,6 +29,7 @@ export const Sidebar: React.FC = () => {
     { label: 'Book Shipment', path: '/book-parcel', icon: PackagePlus, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'BRANCH_MANAGER', 'CUSTOMER'] },
     { label: 'All Parcels', path: '/parcels', icon: Package, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'BRANCH_MANAGER', 'CUSTOMER', 'DELIVERY_AGENT'] },
     { label: 'Assignments', path: '/assignments', icon: SendHorizontal, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'BRANCH_MANAGER', 'DELIVERY_AGENT'] },
+    { label: 'Linehaul Transfers', path: '/linehaul', icon: Boxes, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'BRANCH_MANAGER', 'DELIVERY_AGENT'] },
     { label: 'QR Custody Scan', path: '/qr-scanner', icon: QrCode, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'BRANCH_MANAGER', 'DELIVERY_AGENT'] },
     { label: 'Branches', path: '/branches', icon: GitBranch, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'BRANCH_MANAGER'] },
     { label: 'Employees', path: '/employees', icon: Users, roles: ['SUPER_ADMIN', 'ORG_ADMIN', 'BRANCH_MANAGER'] },

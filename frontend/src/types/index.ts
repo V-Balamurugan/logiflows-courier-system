@@ -33,6 +33,18 @@ export type ScanType =
   | 'OUT_FOR_DELIVERY' 
   | 'DELIVERY_CONFIRMATION';
 
+export interface Organization {
+  id: number;
+  name: string;
+  code: string;
+  contact_email: string;
+  contact_phone?: string;
+  address?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
 export interface User {
   id: number;
   email: string;
@@ -163,6 +175,120 @@ export interface DeliveryAssignment {
   vehicle_number?: string;
 }
 
+export interface EmployeeSuggestion {
+  employee_id: number;
+  full_name: string;
+  active_assignments: number;
+  max_capacity: number;
+  workload_utilization_pct: number;
+  is_available: boolean;
+  score: number;
+  explanation: string;
+}
+
+export interface OrganizationDashboard {
+  organization_id: number;
+  organization_name: string;
+  total_branches: number;
+  active_branches: number;
+  total_employees: number;
+  active_employees: number;
+  total_vehicles: number;
+  available_vehicles: number;
+  total_parcels: number;
+  active_deliveries: number;
+  completed_deliveries: number;
+}
+
+export interface BranchDashboard {
+  branch_id: number;
+  branch_name: string;
+  branch_code: string;
+  is_active: boolean;
+  active_parcels_origin: number;
+  active_parcels_dest: number;
+  total_active_parcels: number;
+  active_assignments: number;
+  assigned_employees: number;
+  assigned_vehicles: number;
+}
+
+export interface EmployeeDashboard {
+  employee_id: number;
+  full_name: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  branch_id?: number;
+  active_assignments: number;
+  completed_assignments: number;
+  total_assigned_parcels: number;
+}
+
+export interface EmployeeInviteResponse {
+  user_id: number;
+  email: string;
+  invite_token: string;
+  expires_in_hours: number;
+  invite_url: string;
+}
+
+export interface CustomerProfileUpdate {
+  company_name?: string;
+  gst_number?: string;
+  default_pickup_address?: string;
+  default_delivery_address?: string;
+}
+
+export interface CustodyChainRecord {
+  id: number;
+  scan_type: ScanType;
+  is_successful: boolean;
+  failure_reason?: string;
+  scanned_by_id: number;
+  scanned_by_name?: string;
+  branch_id?: number;
+  created_at: string;
+  previous_hash?: string;
+  record_hash?: string;
+  computed_hash?: string;
+  verified: boolean;
+}
+
+export interface CustodyChainVerification {
+  tracking_number: string;
+  parcel_id: number;
+  total_scans: number;
+  is_valid: boolean;
+  tamper_detected: boolean;
+  chain: CustodyChainRecord[];
+}
+
+export interface VehicleSuggestion {
+  vehicle_id: number;
+  vehicle_number: string;
+  vehicle_type: string;
+  max_weight_kg: number;
+  max_volume_cbm?: number;
+  parcel_weight_kg: number;
+  weight_utilization_pct: number;
+  fits_capacity: boolean;
+  score: number;
+  explanation: string;
+}
+
+export interface DispatchSuggestionsResponse {
+  parcel_id: number;
+  tracking_number: string;
+  parcel_weight_kg: number;
+  parcel_volume_cbm: number;
+  branch_id: number;
+  branch_name: string;
+  suggested_employees: EmployeeSuggestion[];
+  suggested_vehicles: VehicleSuggestion[];
+  summary_recommendation: string;
+}
+
 export interface PublicTrackingResponse {
   tracking_number: string;
   status: ParcelStatus;
@@ -186,6 +312,113 @@ export interface PublicTrackingResponse {
   }[];
 }
 
+export type ManifestStatus = 'DRAFT' | 'SEALED' | 'IN_TRANSIT' | 'ARRIVED' | 'RECONCILED' | 'CANCELLED';
+export type BagStatus = 'OPEN' | 'SEALED' | 'IN_TRANSIT' | 'RECEIVED' | 'OPENED_AT_DEST';
+export type ManifestItemStatus = 'EXPECTED' | 'RECEIVED' | 'MISSING' | 'DAMAGED';
+export type DiscrepancyType = 'MISSING' | 'DAMAGED' | 'EXCESS' | 'SEAL_BROKEN';
+export type DiscrepancySeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type DiscrepancyStatus = 'OPEN' | 'INVESTIGATING' | 'RESOLVED';
+
+export interface BagParcelInfo {
+  parcel_id: number;
+  tracking_number: string;
+  weight_kg: number;
+  delivery_status: string;
+  is_active: boolean;
+  added_at: string;
+  debagged_at?: string;
+}
+
+export interface ConsolidationBag {
+  id: number;
+  organization_id: number;
+  bag_code: string;
+  origin_branch_id: number;
+  dest_branch_id: number;
+  origin_branch_name?: string;
+  dest_branch_name?: string;
+  manifest_id?: number;
+  seal_number?: string;
+  status: BagStatus;
+  total_weight_kg: number;
+  parcel_count: number;
+  notes?: string;
+  sealed_at?: string;
+  received_at?: string;
+  created_at: string;
+  parcels: BagParcelInfo[];
+}
+
+export interface LinehaulManifestItem {
+  id: number;
+  parcel_id: number;
+  tracking_number: string;
+  weight_kg: number;
+  bag_id?: number;
+  bag_code?: string;
+  status: ManifestItemStatus;
+  is_active: boolean;
+  scanned_out_at?: string;
+  scanned_in_at?: string;
+  remarks?: string;
+}
+
+export interface TransferDiscrepancy {
+  id: number;
+  organization_id: number;
+  manifest_id: number;
+  manifest_number?: string;
+  parcel_id?: number;
+  tracking_number?: string;
+  bag_id?: number;
+  discrepancy_type: DiscrepancyType;
+  severity: DiscrepancySeverity;
+  status: DiscrepancyStatus;
+  description: string;
+  resolution_notes?: string;
+  reported_by_id?: number;
+  reported_by_name?: string;
+  resolved_by_id?: number;
+  reported_at: string;
+  resolved_at?: string;
+}
+
+export interface LinehaulManifest {
+  id: number;
+  organization_id: number;
+  manifest_number: string;
+  origin_branch_id: number;
+  dest_branch_id: number;
+  origin_branch_name?: string;
+  dest_branch_name?: string;
+  vehicle_id?: number;
+  vehicle_number?: string;
+  driver_id?: number;
+  driver_name?: string;
+  seal_number?: string;
+  status: ManifestStatus;
+  expected_parcel_count: number;
+  received_parcel_count: number;
+  total_weight_kg: number;
+  notes?: string;
+  dispatched_at?: string;
+  arrived_at?: string;
+  reconciled_at?: string;
+  created_at: string;
+  items: LinehaulManifestItem[];
+  bags: ConsolidationBag[];
+  discrepancies: TransferDiscrepancy[];
+}
+
+export interface ManifestReconciliationResult {
+  manifest: LinehaulManifest;
+  received_count: number;
+  damaged_count: number;
+  missing_count: number;
+  excess_count: number;
+  discrepancies_created: number;
+}
+
 export interface DashboardStats {
   role: string;
   total_parcels: number;
@@ -204,4 +437,3 @@ export interface DashboardStats {
     deliveries_completed: number;
   }[];
 }
-

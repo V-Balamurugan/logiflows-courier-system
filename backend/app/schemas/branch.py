@@ -1,4 +1,5 @@
-from pydantic import BaseModel, EmailStr, Field
+import math
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional
 from datetime import datetime
 from app.models.enums import OperatingStatus
@@ -19,6 +20,26 @@ class BranchBase(BaseModel):
     operating_status: OperatingStatus = OperatingStatus.ACTIVE
     is_active: bool = True
 
+    @field_validator("latitude")
+    @classmethod
+    def validate_latitude(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None:
+            if math.isnan(v) or math.isinf(v):
+                raise ValueError("Latitude must be a finite number")
+            if not (-90.0 <= v <= 90.0):
+                raise ValueError("Latitude must be between -90.0 and 90.0 degrees")
+        return v
+
+    @field_validator("longitude")
+    @classmethod
+    def validate_longitude(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None:
+            if math.isnan(v) or math.isinf(v):
+                raise ValueError("Longitude must be a finite number")
+            if not (-180.0 <= v <= 180.0):
+                raise ValueError("Longitude must be between -180.0 and 180.0 degrees")
+        return v
+
 
 class BranchCreate(BranchBase):
     organization_id: Optional[int] = None
@@ -38,6 +59,26 @@ class BranchUpdate(BaseModel):
     operating_status: Optional[OperatingStatus] = None
     is_active: Optional[bool] = None
 
+    @field_validator("latitude")
+    @classmethod
+    def validate_latitude(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None:
+            if math.isnan(v) or math.isinf(v):
+                raise ValueError("Latitude must be a finite number")
+            if not (-90.0 <= v <= 90.0):
+                raise ValueError("Latitude must be between -90.0 and 90.0 degrees")
+        return v
+
+    @field_validator("longitude")
+    @classmethod
+    def validate_longitude(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None:
+            if math.isnan(v) or math.isinf(v):
+                raise ValueError("Longitude must be a finite number")
+            if not (-180.0 <= v <= 180.0):
+                raise ValueError("Longitude must be between -180.0 and 180.0 degrees")
+        return v
+
 
 class BranchResponse(BranchBase):
     id: int
@@ -48,3 +89,15 @@ class BranchResponse(BranchBase):
     class Config:
         from_attributes = True
 
+
+class BranchDashboardResponse(BaseModel):
+    branch_id: int
+    branch_code: str
+    branch_name: str
+    city: str
+    operating_status: OperatingStatus
+    is_active: bool
+    total_assigned_employees: int
+    stationed_vehicles: int
+    active_inbound_parcels: int
+    active_outbound_parcels: int

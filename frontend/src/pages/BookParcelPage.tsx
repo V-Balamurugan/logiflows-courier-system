@@ -91,14 +91,30 @@ export const BookParcelPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, [formData.weight_kg, formData.length_cm, formData.width_cm, formData.height_cm, formData.service_type]);
 
+  const selectedOrigin = branches.find((item) => item.id.toString() === formData.origin_branch_id);
+  const allowedDestBranches = selectedOrigin
+    ? branches.filter(
+        (item) => item.organization_id === selectedOrigin.organization_id && item.id.toString() !== formData.origin_branch_id
+      )
+    : branches;
+
   const handleOriginChange = (branchIdStr: string) => {
     const b = branches.find((item) => item.id.toString() === branchIdStr);
+    const validDests = b
+      ? branches.filter((item) => item.organization_id === b.organization_id && item.id.toString() !== branchIdStr)
+      : [];
+    const newDest = validDests.length > 0 ? validDests[0] : null;
+
     setFormData((prev) => ({
       ...prev,
       origin_branch_id: branchIdStr,
       sender_city: b ? b.city : prev.sender_city,
       sender_state: b ? b.state : prev.sender_state,
       sender_pincode: b ? b.pincode : prev.sender_pincode,
+      dest_branch_id: newDest ? newDest.id.toString() : prev.dest_branch_id,
+      receiver_city: newDest ? newDest.city : prev.receiver_city,
+      receiver_state: newDest ? newDest.state : prev.receiver_state,
+      receiver_pincode: newDest ? newDest.pincode : prev.receiver_pincode,
     }));
   };
 
@@ -116,6 +132,32 @@ export const BookParcelPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (!formData.origin_branch_id || !formData.dest_branch_id) {
+      setError('Please select both Origin and Destination branches.');
+      return;
+    }
+    if (formData.origin_branch_id === formData.dest_branch_id) {
+      setError('Origin and Destination branch cannot be the same.');
+      return;
+    }
+    if (formData.sender_address.trim().length < 5 || formData.receiver_address.trim().length < 5) {
+      setError('Sender and Receiver street addresses must each be at least 5 characters long.');
+      return;
+    }
+    const w = parseFloat(formData.weight_kg);
+    if (isNaN(w) || w < 0.01 || w > 1000) {
+      setError('Weight must be between 0.01 kg and 1000 kg.');
+      return;
+    }
+    const l = parseFloat(formData.length_cm);
+    const wi = parseFloat(formData.width_cm);
+    const h = parseFloat(formData.height_cm);
+    if (isNaN(l) || isNaN(wi) || isNaN(h) || l < 1 || l > 500 || wi < 1 || wi > 500 || h < 1 || h > 500) {
+      setError('Dimensions (L x W x H) must each be between 1 cm and 500 cm.');
+      return;
+    }
+
     setLoading(true);
     try {
       const created = await parcelApi.book({
@@ -201,7 +243,7 @@ export const BookParcelPage: React.FC = () => {
                   onChange={(e) => handleDestChange(e.target.value)}
                   className="w-full px-3 py-2 border rounded-xl text-xs bg-slate-50 focus:bg-white"
                 >
-                  {branches.map((b) => (
+                  {allowedDestBranches.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.branch_name} ({b.city})
                     </option>
@@ -223,10 +265,11 @@ export const BookParcelPage: React.FC = () => {
                 <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Sender Name *</label>
                 <input
                   type="text"
+                  name="sender_name"
                   required
                   value={formData.sender_name}
                   onChange={(e) => setFormData({ ...formData, sender_name: e.target.value })}
-                  placeholder="e.g. Acme Corp"
+                  placeholder="Sender full name or company"
                   className="w-full px-3 py-2 border rounded-xl text-xs"
                 />
               </div>

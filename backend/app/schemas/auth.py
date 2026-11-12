@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import Optional
 from app.models.enums import UserRole
 
@@ -25,6 +25,8 @@ class LoginRequest(BaseModel):
 
 
 class RegisterCustomerRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     email: EmailStr
     password: str = Field(..., min_length=6)
     full_name: str = Field(..., min_length=2, max_length=255)
@@ -34,6 +36,15 @@ class RegisterCustomerRequest(BaseModel):
     default_address: Optional[str] = None
 
 
+class CustomerProfileUpdateRequest(BaseModel):
+    full_name: Optional[str] = Field(None, min_length=2, max_length=255)
+    phone: Optional[str] = None
+    company_name: Optional[str] = None
+    gst_number: Optional[str] = None
+    default_pickup_address: Optional[str] = None
+    default_delivery_address: Optional[str] = None
+
+
 class PasswordChangeRequest(BaseModel):
     current_password: str
     new_password: str = Field(..., min_length=6)
@@ -41,4 +52,3 @@ class PasswordChangeRequest(BaseModel):
 
 class LogoutRequest(BaseModel):
     refresh_token: Optional[str] = None
-
