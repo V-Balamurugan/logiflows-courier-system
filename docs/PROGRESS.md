@@ -1,10 +1,10 @@
 # LogiFlows — Master Development Progress Tracker (Stage 1)
 
-**Last Updated:** November 10, 2026  
-**Current Phase:** Phase 13 (COMPLETE & VERIFIED) $\rightarrow$ Phase 14 (READY)  
+**Last Updated:** November 12, 2026  
+**Current Phase:** Phase 14 (COMPLETE & CI VERIFIED) $\rightarrow$ Phase 15 (READY AFTER MERGE)  
 **Base Branch:** `hardening/phase-11`  
-**Active Work Branch:** `phase-13/tracking-custody`  
-**Pull Request:** [PR #5: Phase 13 Tracking & QR Custody Operations](https://github.com/V-Balamurugan/logiflows-courier-system/pull/5)  
+**Active Work Branch:** `phase-14/linehaul-transfers`  
+**Pull Request:** [PR #6: Phase 14 Branch-to-Branch Linehaul Transfers, Consolidation Bags & Reconciliation](https://github.com/V-Balamurugan/logiflows-courier-system/pull/6)  
 
 ---
 
@@ -18,7 +18,7 @@
 | **Python** | 3.14.7 (system), 3.14 (venv) | Verified | Active virtual environment at `backend/venv` |
 | **GitHub CLI (gh)** | 2.103.3 | Verified | Full read/write/PR authenticated |
 | **Docker CLI** | 29.7.2 | Verified | Compose v5.5.1 syntax validated |
-| **Docker Daemon** | WSL2 Engine Verified | Verified | Compose and container services operational |
+| **Docker Daemon** | Manually paused locally during Phase 14 | Blocked locally | Local Compose syntax validated (`docker compose config -q`); PG16 authoritative verification executed in GitHub Actions `backend-ci` |
 | **PostgreSQL 16** | Service in CI | Verified in CI | SQLite WAL/StaticPool for local unit tests; PG16 authoritative in CI |
 | **Network** | Online | Verified | Package registry and GitHub API reachable |
 
@@ -30,8 +30,8 @@
 | :--- | :--- | :--- | :--- | :--- |
 | **Phase 11** | System Hardening & Verification | **COMPLETE** | `hardening/phase-11.10-final-verification` / [PR #3](https://github.com/V-Balamurugan/logiflows-courier-system/pull/3) | **PASSED (Green)** |
 | **Phase 12** | Core Logistics Business Workflows (12.1–12.7) | **COMPLETE** | `phase-12/core-workflows` / [PR #4](https://github.com/V-Balamurugan/logiflows-courier-system/pull/4) | **MERGED into hardening/phase-11** |
-| **Phase 13** | Tracking & QR Custody Operations (13.1–13.6) | **COMPLETE** | `phase-13/tracking-custody` / [PR #5](https://github.com/V-Balamurugan/logiflows-courier-system/pull/5) | **VERIFIED (Ready for Review)** |
-| **Phase 14** | Branch-to-Branch Linehaul Transfers & Operations | READY | `phase-14/linehaul-transfers` | Pending Phase 13 merge |
+| **Phase 13** | Tracking & QR Custody Operations (13.1–13.6) | **COMPLETE** | `phase-13/tracking-custody` / [PR #5](https://github.com/V-Balamurugan/logiflows-courier-system/pull/5) | **MERGED into hardening/phase-11** |
+| **Phase 14** | Branch-to-Branch Linehaul Transfers & Operations | **COMPLETE (CI Verified)** | `phase-14/linehaul-transfers` / [PR #6](https://github.com/V-Balamurugan/logiflows-courier-system/pull/6) | **PASSED ([Run #43171799190](https://github.com/V-Balamurugan/logiflows-courier-system/actions/runs/43171799190))** |
 | **Phase 15** | Dynamic Route Optimization & Map Integration | NOT STARTED | — | — |
 | **Phase 16** | AI Delay Prediction & Machine Learning | NOT STARTED | — | — |
 | **Phase 17** | Real-Time Notifications & n8n Workflows | NOT STARTED | — | — |
@@ -89,15 +89,45 @@
 
 ---
 
-## 5. Next Steps for Phase 14
+## 5. Phase 14 Verified Deliverables & Evidence
 
-1. Review and merge PR #5 (`phase-13/tracking-custody`) into `hardening/phase-11`.
-2. Create branch `phase-14/linehaul-transfers` from verified head.
-3. Implement Phase 14: Branch-to-Branch Linehaul Transfers & Operations:
-   - Linehaul transfer manifests (creation, seal numbers, vehicle assignment).
-   - Manifest dispatch, in-transit state transitions, and arrival receiving scans.
-   - Bagging / de-bagging consignment consolidation and reconciliation.
-   - Discrepancy reporting (missing or damaged consignments upon inward arrival).
+### Concrete Evidence Summary (Section 8 Global Phase Gate)
+
+| Gate / Command | Command Executed | Result | Evidence |
+| :--- | :--- | :--- | :--- |
+| **Alembic Drift** | `Set-Location backend; ..\backend\venv\Scripts\python.exe -m alembic check` | **PASSED** | `No new upgrade operations detected.` (Exit code 0, head `fe12bb91cbb7`) |
+| **Backend Pytest** | `.\backend\venv\Scripts\pytest.exe backend/app/tests --cov=app --cov-report=term-missing` | **PASSED** | `106 passed, 4 warnings in 60.60s`; `TOTAL Coverage: 86%` (`4053` stmts, `561` missed; Target $\ge 80\%$) |
+| **Frontend Vitest** | `npm --prefix frontend test` | **PASSED** | `Test Files 6 passed (6)`, `Tests 32 passed (32)` in `15.31s` |
+| **Oxlint** | `npm --prefix frontend run lint` | **PASSED** | `Found 56 warnings and 0 errors.` (43 files) |
+| **Type Check & Build** | `npm --prefix frontend run build` | **PASSED** | `tsc -b && vite build` exited 0 (`2190 modules`, `built in 1.50s`) |
+| **Playwright E2E** | `Set-Location frontend; npx playwright test` | **PASSED** | `48 passed (2.4m)` across Desktop Chrome (16), Mobile Chrome (16), Tablet (16) |
+| **pip-audit** | `.\backend\venv\Scripts\pip-audit.exe` | **PASSED** | `No known vulnerabilities found` (Exit code 0) |
+| **npm audit** | `npm --prefix frontend audit --audit-level=high` | **PASSED** | `found 0 vulnerabilities` (Exit code 0) |
+| **Docker Compose** | `docker compose config -q` | **PASSED** | Exit code 0 |
+| **GitHub Actions CI (PG16 + E2E)** | [CI Run #43171799190](https://github.com/V-Balamurugan/logiflows-courier-system/actions/runs/43171799190) | **PASSED** | All 6 workflow jobs passed: PG16 `alembic upgrade head` & `check` (0 drift), PG16 Pytest `106 passed` (`90.68%` cov), Frontend CI, Audits, Playwright `48 passed`, CI Gate |
+
+## 6. Phase 14 Modules & Acceptance Criteria Audit
+
+- [x] **14.1 Data Schema & Migration (`fe12bb91cbb7`):**
+  - Added `linehaul_manifests`, `consolidation_bags`, `bag_items` (with partial unique index `uq_active_parcel_in_bag`), `linehaul_manifest_items` (with partial unique index `uq_active_parcel_on_manifest`), and `transfer_discrepancies` plus supporting enums (`ManifestStatus`, `BagStatus`, `ManifestItemStatus`, `DiscrepancyType`, `DiscrepancySeverity`, `DiscrepancyStatus`).
+- [x] **14.2 Consolidation Bagging & De-Bagging:**
+  - Lifecycle `OPEN -> SEALED -> IN_TRANSIT -> RECEIVED -> OPENED_AT_DEST`, branch corridor matching, seal validation, and parcel removal from draft bags.
+- [x] **14.3 Linehaul Manifest Lifecycle & Concurrency:**
+  - Lifecycle `DRAFT -> SEALED -> IN_TRANSIT -> ARRIVED -> RECONCILED | CANCELLED`.
+  - Conditional CAS vehicle locking (`IN_USE`) on dispatch, payload capacity enforcement against sum of parcel weights, `AT_ORIGIN_BRANCH` parcel pre-check, single-transaction commit + post-commit SSE broadcast via `ShipmentStateMachine.transition(..., commit=False)` and `broadcast_milestone(...)`, and full DB rollback on dispatch failure.
+- [x] **14.4 Inward Arrival, Reconciliation & Discrepancies:**
+  - Arrival scanning (assigned driver or destination branch manager), inward reconciliation (`INTACT` $\rightarrow$ `AT_DESTINATION_BRANCH`, `DAMAGED` / `MISSING` / `SEAL_BROKEN` $\rightarrow$ `ON_HOLD`), excess parcel flagging, and full `TransferDiscrepancy` resolution (`OPEN -> UNDER_INVESTIGATION -> RESOLVED | WRITTEN_OFF`).
+- [x] **14.5 Cross-Module Guards & RBAC / Tenant Isolation:**
+  - HTTP 409 guards preventing branch deactivation with active manifests (`branch_service.py`), maintenance toggle on vehicles assigned to active manifests (`vehicle_service.py`), and last-mile delivery assignment on parcels attached to active manifests (`assignment_service.py`).
+  - Strict tenant isolation returning HTTP 404 across organizations and origin/destination branch scoping documented in `docs/PERMISSIONS.md` and `docs/DECISIONS.md` (`ADR-012`).
+- [x] **14.6 Frontend Linehaul UI & Tests:**
+  - Built `LinehaulPage.tsx` (Manifests, Consolidation Bags, Discrepancies tabs + responsive `p-4 sm:p-12` empty/loading panels verified on 390px Mobile Chrome + modal workflows), `linehaulApi`, `Badge.tsx`, `Sidebar.tsx`, and `AppRoutes.tsx` (`/linehaul`), covered by `Phase14Linehaul.test.tsx`, `LinehaulPage.test.tsx`, and E2E `Journey 16`.
+
+## 7. Next Steps for Phase 15
+
+1. Review and merge Phase 14 PR (`phase-14/linehaul-transfers` $\rightarrow$ `hardening/phase-11`) once user authorizes merge.
+2. Create branch `phase-15/route-optimization` from verified `hardening/phase-11` head.
+3. Implement Phase 15: Dynamic Route Optimization & Map Integration.
 
 
 ---

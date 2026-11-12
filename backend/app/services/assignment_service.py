@@ -6,6 +6,7 @@ from fastapi import HTTPException, status
 
 from app.models.assignment import DeliveryAssignment
 from app.models.parcel import Parcel
+from app.models.linehaul import LinehaulManifestItem
 from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.models.enums import AssignmentStatus, AssignmentType, ParcelStatus, VehicleStatus, UserRole
@@ -53,6 +54,16 @@ class AssignmentService:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Parcel is already actively assigned (Assignment #{active_existing.id})"
+            )
+
+        active_manifest_item = db.query(LinehaulManifestItem).filter(
+            LinehaulManifestItem.parcel_id == data.parcel_id,
+            LinehaulManifestItem.is_active == True
+        ).first()
+        if active_manifest_item:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Parcel is currently locked on active Linehaul Manifest #{active_manifest_item.manifest_id}"
             )
 
         # 5. Validate Employee and Concurrent Workload (AC2)

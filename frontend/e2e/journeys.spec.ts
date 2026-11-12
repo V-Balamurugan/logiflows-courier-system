@@ -228,4 +228,23 @@ test.describe('LogiFlows Courier System E2E Suite', () => {
     await expect(page.locator('text=Transit Geo-Route Map')).toBeVisible();
   });
 
+  test('Journey 16: Branch Manager Linehaul Transfers, Bags & Discrepancies Portal', async ({ page }) => {
+    await page.goto('/login');
+    await page.locator('input[type="email"]').fill('manager.mumbai@logiflows.com');
+    await page.locator('input[type="password"]').fill('Manager@123');
+    await page.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(/.*dashboard/);
+
+    await page.goto('/linehaul');
+    await expect(page.locator('text=Linehaul Transfers & Consolidation')).toBeVisible();
+    await expect(page.locator('button:has-text("Create Linehaul Manifest")')).toBeVisible();
+    await expect(page.locator('button:has-text("New Bag")')).toBeVisible();
+
+    // Switch across Consolidation Bags and Discrepancies tabs
+    await page.locator('button:has-text("Consolidation Bags")').click();
+    await expect(page.locator('text=Bag Code').or(page.locator('text=No consolidation bags created')).first()).toBeVisible();
+    await page.locator('button:has-text("Discrepancies")').click();
+    await expect(page.locator('button:has-text("Log Transfer Discrepancy")')).toBeVisible();
+  });
+
 });

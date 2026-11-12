@@ -19,7 +19,8 @@ from app.routers import (
     vehicles,
     tracking,
     custody,
-    analytics
+    analytics,
+    linehaul,
 )
 
 
@@ -68,6 +69,7 @@ app.include_router(vehicles.router, prefix=settings.API_V1_STR)
 app.include_router(tracking.router, prefix=settings.API_V1_STR)
 app.include_router(custody.router, prefix=settings.API_V1_STR)
 app.include_router(analytics.router, prefix=settings.API_V1_STR)
+app.include_router(linehaul.router, prefix=settings.API_V1_STR)
 
 
 @app.get("/", tags=["Health"])
