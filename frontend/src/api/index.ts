@@ -15,6 +15,7 @@ import {
   EmployeeInviteResponse,
   CustomerProfileUpdate,
   DispatchSuggestionsResponse,
+  CustodyChainVerification,
 } from '../types';
 
 export const organizationApi = {
@@ -265,9 +266,20 @@ export const trackingApi = {
     const res = await api.get<PublicTrackingResponse>(`/tracking/public/${trackingNumber}`);
     return res.data;
   },
+  getAuthenticated: async (trackingNumber: string): Promise<any> => {
+    const res = await api.get(`/tracking/${trackingNumber}`);
+    return res.data;
+  },
   updateMilestone: async (trackingNumber: string, data: any) => {
     const res = await api.post(`/tracking/${trackingNumber}/update`, data);
     return res.data;
+  },
+  updateStatus: async (trackingNumber: string, data: any) => {
+    const res = await api.post(`/tracking/${trackingNumber}/update`, data);
+    return res.data;
+  },
+  getLiveEventSourceUrl: (trackingNumber: string): string => {
+    return `/api/v1/tracking/live/${trackingNumber}`;
   },
 };
 
@@ -279,12 +291,17 @@ export const custodyApi = {
     latitude?: number;
     longitude?: number;
     notes?: string;
+    timestamp?: string;
   }) => {
     const res = await api.post('/custody/scan', data);
     return res.data;
   },
   getHistory: async (trackingNumber: string) => {
     const res = await api.get(`/custody/${trackingNumber}/history`);
+    return res.data;
+  },
+  verifyChain: async (trackingNumber: string): Promise<CustodyChainVerification> => {
+    const res = await api.get<CustodyChainVerification>(`/custody/${trackingNumber}/verify-chain`);
     return res.data;
   },
 };

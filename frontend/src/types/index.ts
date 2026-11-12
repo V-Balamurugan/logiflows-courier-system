@@ -240,6 +240,30 @@ export interface CustomerProfileUpdate {
   default_delivery_address?: string;
 }
 
+export interface CustodyChainRecord {
+  id: number;
+  scan_type: ScanType;
+  is_successful: boolean;
+  failure_reason?: string;
+  scanned_by_id: number;
+  scanned_by_name?: string;
+  branch_id?: number;
+  created_at: string;
+  previous_hash?: string;
+  record_hash?: string;
+  computed_hash?: string;
+  verified: boolean;
+}
+
+export interface CustodyChainVerification {
+  tracking_number: string;
+  parcel_id: number;
+  total_scans: number;
+  is_valid: boolean;
+  tamper_detected: boolean;
+  chain: CustodyChainRecord[];
+}
+
 export interface VehicleSuggestion {
   vehicle_id: number;
   vehicle_number: string;

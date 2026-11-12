@@ -314,4 +314,19 @@ class ShipmentStateMachine:
 
         db.commit()
         db.refresh(parcel)
+
+        try:
+            from app.services.broadcaster import milestone_broadcaster
+            milestone_broadcaster.broadcast(parcel.tracking_number, {
+                "tracking_number": parcel.tracking_number,
+                "status": to_status.value,
+                "location": loc_desc,
+                "latitude": latitude,
+                "longitude": longitude,
+                "remarks": remarks or rule.description,
+                "timestamp": now.isoformat()
+            })
+        except Exception:
+            pass
+
         return parcel

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, Package, MapPin, Calendar, Clock, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Search, AlertTriangle, Radio } from 'lucide-react';
 import { trackingApi } from '../api';
 import { PublicTrackingResponse } from '../types';
 import { Badge } from '../components/Badge';
@@ -12,6 +12,7 @@ export const PublicTrackingPage: React.FC = () => {
   const [data, setData] = useState<PublicTrackingResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isLiveActive, setIsLiveActive] = useState(false);
 
   const fetchTracking = async (num: string) => {
     if (!num.trim()) return;
@@ -36,6 +37,75 @@ export const PublicTrackingPage: React.FC = () => {
       fetchTracking(num);
     }
   }, []);
+
+  // Real-Time Server-Sent Events (SSE) Live Milestone Listener
+  useEffect(() => {
+    if (!data?.tracking_number) {
+      setIsLiveActive(false);
+      return;
+    }
+
+    let eventSource: EventSource | null = null;
+    try {
+      const sseUrl = trackingApi.getLiveEventSourceUrl(data.tracking_number);
+      eventSource = new EventSource(sseUrl);
+
+      eventSource.onopen = () => {
+        setIsLiveActive(true);
+      };
+
+      eventSource.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.status) {
+            setData((prev) => {
+              if (!prev) return prev;
+              const updated = { ...prev, status: payload.status };
+              if (payload.location) {
+                updated.current_location = payload.location;
+              }
+              if (payload.latitude != null && payload.longitude != null) {
+                updated.current_lat = payload.latitude;
+                updated.current_lng = payload.longitude;
+              }
+              if (payload.timestamp && payload.status) {
+                const alreadyExists = prev.milestones.some(
+                  (m) => m.status === payload.status && m.timestamp === payload.timestamp
+                );
+                if (!alreadyExists) {
+                  updated.milestones = [
+                    ...prev.milestones,
+                    {
+                      status: payload.status,
+                      location: payload.location || null,
+                      remarks: payload.remarks || null,
+                      timestamp: payload.timestamp
+                    }
+                  ];
+                }
+              }
+              return updated;
+            });
+          }
+        } catch {
+          // Keep-alive or non-JSON comments
+        }
+      };
+
+      eventSource.onerror = () => {
+        setIsLiveActive(false);
+      };
+    } catch {
+      setIsLiveActive(false);
+    }
+
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+      setIsLiveActive(false);
+    };
+  }, [data?.tracking_number]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,7 +154,15 @@ export const PublicTrackingPage: React.FC = () => {
           {/* Top Banner */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
             <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tracking Number</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tracking Number</span>
+                {isLiveActive && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Live GPS Stream
+                  </span>
+                )}
+              </div>
               <h2 className="text-2xl font-black text-slate-900 mt-0.5">{data.tracking_number}</h2>
             </div>
             <div className="flex items-center gap-3">

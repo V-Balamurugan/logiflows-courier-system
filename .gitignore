@@ -44,4 +44,6 @@ lerna-debug.log*
 .coverage
 htmlcov/
 .vitest/
+test-results/
+playwright-report/
 
