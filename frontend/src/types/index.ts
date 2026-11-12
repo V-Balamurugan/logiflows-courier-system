@@ -312,6 +312,113 @@ export interface PublicTrackingResponse {
   }[];
 }
 
+export type ManifestStatus = 'DRAFT' | 'SEALED' | 'IN_TRANSIT' | 'ARRIVED' | 'RECONCILED' | 'CANCELLED';
+export type BagStatus = 'OPEN' | 'SEALED' | 'IN_TRANSIT' | 'RECEIVED' | 'OPENED_AT_DEST';
+export type ManifestItemStatus = 'EXPECTED' | 'RECEIVED' | 'MISSING' | 'DAMAGED';
+export type DiscrepancyType = 'MISSING' | 'DAMAGED' | 'EXCESS' | 'SEAL_BROKEN';
+export type DiscrepancySeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type DiscrepancyStatus = 'OPEN' | 'INVESTIGATING' | 'RESOLVED';
+
+export interface BagParcelInfo {
+  parcel_id: number;
+  tracking_number: string;
+  weight_kg: number;
+  delivery_status: string;
+  is_active: boolean;
+  added_at: string;
+  debagged_at?: string;
+}
+
+export interface ConsolidationBag {
+  id: number;
+  organization_id: number;
+  bag_code: string;
+  origin_branch_id: number;
+  dest_branch_id: number;
+  origin_branch_name?: string;
+  dest_branch_name?: string;
+  manifest_id?: number;
+  seal_number?: string;
+  status: BagStatus;
+  total_weight_kg: number;
+  parcel_count: number;
+  notes?: string;
+  sealed_at?: string;
+  received_at?: string;
+  created_at: string;
+  parcels: BagParcelInfo[];
+}
+
+export interface LinehaulManifestItem {
+  id: number;
+  parcel_id: number;
+  tracking_number: string;
+  weight_kg: number;
+  bag_id?: number;
+  bag_code?: string;
+  status: ManifestItemStatus;
+  is_active: boolean;
+  scanned_out_at?: string;
+  scanned_in_at?: string;
+  remarks?: string;
+}
+
+export interface TransferDiscrepancy {
+  id: number;
+  organization_id: number;
+  manifest_id: number;
+  manifest_number?: string;
+  parcel_id?: number;
+  tracking_number?: string;
+  bag_id?: number;
+  discrepancy_type: DiscrepancyType;
+  severity: DiscrepancySeverity;
+  status: DiscrepancyStatus;
+  description: string;
+  resolution_notes?: string;
+  reported_by_id?: number;
+  reported_by_name?: string;
+  resolved_by_id?: number;
+  reported_at: string;
+  resolved_at?: string;
+}
+
+export interface LinehaulManifest {
+  id: number;
+  organization_id: number;
+  manifest_number: string;
+  origin_branch_id: number;
+  dest_branch_id: number;
+  origin_branch_name?: string;
+  dest_branch_name?: string;
+  vehicle_id?: number;
+  vehicle_number?: string;
+  driver_id?: number;
+  driver_name?: string;
+  seal_number?: string;
+  status: ManifestStatus;
+  expected_parcel_count: number;
+  received_parcel_count: number;
+  total_weight_kg: number;
+  notes?: string;
+  dispatched_at?: string;
+  arrived_at?: string;
+  reconciled_at?: string;
+  created_at: string;
+  items: LinehaulManifestItem[];
+  bags: ConsolidationBag[];
+  discrepancies: TransferDiscrepancy[];
+}
+
+export interface ManifestReconciliationResult {
+  manifest: LinehaulManifest;
+  received_count: number;
+  damaged_count: number;
+  missing_count: number;
+  excess_count: number;
+  discrepancies_created: number;
+}
+
 export interface DashboardStats {
   role: string;
   total_parcels: number;

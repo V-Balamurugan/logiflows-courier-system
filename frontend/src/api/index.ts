@@ -16,6 +16,10 @@ import {
   CustomerProfileUpdate,
   DispatchSuggestionsResponse,
   CustodyChainVerification,
+  ConsolidationBag,
+  LinehaulManifest,
+  ManifestReconciliationResult,
+  TransferDiscrepancy,
 } from '../types';
 
 export const organizationApi = {
@@ -323,6 +327,150 @@ export const analyticsApi = {
     document.body.appendChild(link);
     link.click();
     link.remove();
+  },
+};
+
+export const linehaulApi = {
+  // Consolidation Bags
+  listBags: async (params?: {
+    status?: string;
+    origin_branch_id?: number;
+    dest_branch_id?: number;
+    unassigned_only?: boolean;
+  }): Promise<ConsolidationBag[]> => {
+    const res = await api.get<ConsolidationBag[]>('/linehaul/bags', { params });
+    return res.data;
+  },
+  createBag: async (data: {
+    origin_branch_id: number;
+    dest_branch_id: number;
+    notes?: string;
+  }): Promise<ConsolidationBag> => {
+    const res = await api.post<ConsolidationBag>('/linehaul/bags', data);
+    return res.data;
+  },
+  attachParcelsToBag: async (
+    bagId: number,
+    data: { parcel_ids?: number[]; tracking_numbers?: string[] }
+  ): Promise<ConsolidationBag> => {
+    const res = await api.post<ConsolidationBag>(`/linehaul/bags/${bagId}/parcels`, data);
+    return res.data;
+  },
+  removeParcelFromBag: async (bagId: number, parcelId: number): Promise<ConsolidationBag> => {
+    const res = await api.delete<ConsolidationBag>(`/linehaul/bags/${bagId}/parcels/${parcelId}`);
+    return res.data;
+  },
+  sealBag: async (bagId: number, seal_number?: string): Promise<ConsolidationBag> => {
+    const res = await api.post<ConsolidationBag>(`/linehaul/bags/${bagId}/seal`, {
+      seal_number: seal_number || undefined,
+    });
+    return res.data;
+  },
+  debagBag: async (bagId: number, notes?: string): Promise<ConsolidationBag> => {
+    const res = await api.post<ConsolidationBag>(`/linehaul/bags/${bagId}/debag`, { notes });
+    return res.data;
+  },
+
+  // Linehaul Manifests
+  listManifests: async (params?: {
+    status?: string;
+    origin_branch_id?: number;
+    dest_branch_id?: number;
+  }): Promise<LinehaulManifest[]> => {
+    const res = await api.get<LinehaulManifest[]>('/linehaul/manifests', { params });
+    return res.data;
+  },
+  getManifest: async (id: number): Promise<LinehaulManifest> => {
+    const res = await api.get<LinehaulManifest>(`/linehaul/manifests/${id}`);
+    return res.data;
+  },
+  createManifest: async (data: {
+    origin_branch_id: number;
+    dest_branch_id: number;
+    vehicle_id?: number;
+    driver_id?: number;
+    seal_number?: string;
+    bag_ids?: number[];
+    parcel_ids?: number[];
+    notes?: string;
+  }): Promise<LinehaulManifest> => {
+    const res = await api.post<LinehaulManifest>('/linehaul/manifests', data);
+    return res.data;
+  },
+  attachManifestItems: async (
+    id: number,
+    data: { bag_ids?: number[]; parcel_ids?: number[]; tracking_numbers?: string[] }
+  ): Promise<LinehaulManifest> => {
+    const res = await api.post<LinehaulManifest>(`/linehaul/manifests/${id}/items`, data);
+    return res.data;
+  },
+  sealManifest: async (id: number, seal_number?: string): Promise<LinehaulManifest> => {
+    const res = await api.post<LinehaulManifest>(`/linehaul/manifests/${id}/seal`, {
+      seal_number: seal_number || undefined,
+    });
+    return res.data;
+  },
+  dispatchManifest: async (
+    id: number,
+    data: { vehicle_id?: number; driver_id?: number; seal_number?: string; notes?: string }
+  ): Promise<LinehaulManifest> => {
+    const res = await api.post<LinehaulManifest>(`/linehaul/manifests/${id}/dispatch`, data);
+    return res.data;
+  },
+  arriveManifest: async (
+    id: number,
+    data: { seal_intact?: boolean; notes?: string }
+  ): Promise<LinehaulManifest> => {
+    const res = await api.post<LinehaulManifest>(`/linehaul/manifests/${id}/arrive`, data);
+    return res.data;
+  },
+  reconcileManifest: async (
+    id: number,
+    data: {
+      received_tracking_numbers: string[];
+      damaged_tracking_numbers?: string[];
+      missing_tracking_numbers?: string[];
+      excess_tracking_numbers?: string[];
+      seal_intact?: boolean;
+      finalize?: boolean;
+      notes?: string;
+    }
+  ): Promise<ManifestReconciliationResult> => {
+    const res = await api.post<ManifestReconciliationResult>(`/linehaul/manifests/${id}/reconcile`, data);
+    return res.data;
+  },
+  cancelManifest: async (id: number, reason: string): Promise<LinehaulManifest> => {
+    const res = await api.post<LinehaulManifest>(`/linehaul/manifests/${id}/cancel`, { reason });
+    return res.data;
+  },
+
+  // Discrepancies
+  listDiscrepancies: async (params?: {
+    manifest_id?: number;
+    status?: string;
+    discrepancy_type?: string;
+  }): Promise<TransferDiscrepancy[]> => {
+    const res = await api.get<TransferDiscrepancy[]>('/linehaul/discrepancies', { params });
+    return res.data;
+  },
+  reportDiscrepancy: async (data: {
+    manifest_id: number;
+    parcel_id?: number;
+    tracking_number?: string;
+    bag_id?: number;
+    discrepancy_type: string;
+    severity?: string;
+    description: string;
+  }): Promise<TransferDiscrepancy> => {
+    const res = await api.post<TransferDiscrepancy>('/linehaul/discrepancies', data);
+    return res.data;
+  },
+  resolveDiscrepancy: async (
+    id: number,
+    data: { status?: string; resolution_notes: string; release_parcel_to_dest?: boolean }
+  ): Promise<TransferDiscrepancy> => {
+    const res = await api.patch<TransferDiscrepancy>(`/linehaul/discrepancies/${id}`, data);
+    return res.data;
   },
 };
 

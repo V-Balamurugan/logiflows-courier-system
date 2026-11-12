@@ -24,15 +24,33 @@ export const Badge: React.FC<BadgeProps> = ({ status }) => {
       case 'COMPLETED':
       case 'PAID':
       case 'AVAILABLE':
+      case 'RECONCILED':
+      case 'RECEIVED':
+      case 'RESOLVED':
         return 'bg-emerald-50 text-emerald-700 border-emerald-200';
       case 'DELIVERY_FAILED':
       case 'CANCELLED':
       case 'RETIRED':
+      case 'MISSING':
+      case 'DAMAGED':
+      case 'SEAL_BROKEN':
+      case 'CRITICAL':
         return 'bg-rose-50 text-rose-700 border-rose-200';
       case 'RETURN_TO_ORIGIN':
       case 'ON_HOLD':
       case 'MAINTENANCE':
+      case 'EXCESS':
+      case 'INVESTIGATING':
+      case 'HIGH':
         return 'bg-orange-50 text-orange-700 border-orange-200';
+      case 'SEALED':
+      case 'ARRIVED':
+      case 'OPENED_AT_DEST':
+        return 'bg-cyan-50 text-cyan-700 border-cyan-200';
+      case 'DRAFT':
+      case 'OPEN':
+      case 'EXPECTED':
+        return 'bg-slate-100 text-slate-700 border-slate-300';
       
       // Roles
       case 'SUPER_ADMIN':
