@@ -136,3 +136,15 @@ This document records architectural decisions, assumptions, and design patterns 
   - Frontend `PublicTrackingPage` establishes an `EventSource` connection to update checkpoints and display an active "Live GPS Stream" status indicator.
 - **Status:** Adopted & Verified (Phase 13).
 
+---
+
+## ADR-012: Atomic Branch-to-Branch Linehaul Manifests, Consolidation Bags & Reconciliation
+
+- **Context:** Inter-branch transfers move multiple parcels and sealed consolidation bags across fleet vehicles, creating risks of double-dispatching vehicles, conflicting last-mile delivery assignments, inconsistent parcel states on partial failure, and unrecorded inward shortages or damages.
+- **Decision:**
+  - Introduced `linehaul_manifests`, `consolidation_bags`, `bag_items`, `linehaul_manifest_items`, and `transfer_discrepancies` via Alembic migration `fe12bb91cbb7`.
+  - Enforced partial unique indexes (`uq_active_parcel_in_bag`, `uq_active_parcel_on_manifest`) so a parcel cannot concurrently reside in two active bags or two active manifests, and blocked last-mile `DeliveryAssignment` creation while a parcel is actively on a linehaul manifest.
+  - Added optional `commit: bool = True` to `ShipmentStateMachine.transition(...)` so `LinehaulService.dispatch_manifest` and `LinehaulService.reconcile_manifest` transition all manifest parcels, lock/release the fleet vehicle via conditional CAS `UPDATE`, update bag statuses, and append discrepancy records inside a single ACID transaction, broadcasting SSE milestones only after commit succeeds.
+  - Destination inward reconciliation strictly verifies expected tracking numbers, marks damaged/missing items as `ParcelStatus.ON_HOLD`, creates `TransferDiscrepancy` records (including `EXCESS` and `SEAL_BROKEN`), and supports audited discrepancy resolution with optional destination hold release.
+- **Status:** Adopted & Verified (Phase 14).
+
