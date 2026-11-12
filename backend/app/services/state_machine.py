@@ -194,7 +194,8 @@ class ShipmentStateMachine:
         longitude: Optional[float] = None,
         source: str = "API",
         cancellation_reason: Optional[str] = None,
-        expected_version: Optional[int] = None
+        expected_version: Optional[int] = None,
+        commit: bool = True,
     ) -> Parcel:
         from_status = parcel.delivery_status
 
@@ -312,21 +313,45 @@ class ShipmentStateMachine:
                 if active_assign.vehicle:
                     active_assign.vehicle.status = VehicleStatus.AVAILABLE
 
-        db.commit()
-        db.refresh(parcel)
+        if commit:
+            db.commit()
+            db.refresh(parcel)
+            ShipmentStateMachine.broadcast_milestone(
+                tracking_number=parcel.tracking_number,
+                to_status=to_status,
+                location=loc_desc,
+                latitude=latitude,
+                longitude=longitude,
+                remarks=remarks or rule.description,
+                timestamp=now,
+            )
+        else:
+            db.flush()
+            db.refresh(parcel)
 
+        return parcel
+
+    @staticmethod
+    def broadcast_milestone(
+        tracking_number: str,
+        to_status: ParcelStatus,
+        location: str,
+        remarks: str,
+        latitude: Optional[float] = None,
+        longitude: Optional[float] = None,
+        timestamp: Optional[datetime] = None,
+    ) -> None:
         try:
             from app.services.broadcaster import milestone_broadcaster
-            milestone_broadcaster.broadcast(parcel.tracking_number, {
-                "tracking_number": parcel.tracking_number,
+            ts = timestamp or datetime.now(timezone.utc)
+            milestone_broadcaster.broadcast(tracking_number, {
+                "tracking_number": tracking_number,
                 "status": to_status.value,
-                "location": loc_desc,
+                "location": location,
                 "latitude": latitude,
                 "longitude": longitude,
-                "remarks": remarks or rule.description,
-                "timestamp": now.isoformat()
+                "remarks": remarks,
+                "timestamp": ts.isoformat()
             })
         except Exception:
             pass
-
-        return parcel

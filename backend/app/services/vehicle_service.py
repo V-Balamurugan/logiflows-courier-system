@@ -6,7 +6,8 @@ from fastapi import HTTPException, status
 from app.models.vehicle import Vehicle
 from app.models.user import User
 from app.models.assignment import DeliveryAssignment
-from app.models.enums import UserRole, VehicleStatus, AssignmentStatus
+from app.models.linehaul import LinehaulManifest
+from app.models.enums import UserRole, VehicleStatus, AssignmentStatus, ManifestStatus
 from app.schemas.vehicle import VehicleCreate, VehicleUpdate, normalize_reg_number
 
 
@@ -105,6 +106,19 @@ class VehicleService:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail=f"Cannot place vehicle into maintenance: actively dispatched on Assignment #{active_assignment.id}"
+                )
+
+            active_manifest = db.query(LinehaulManifest).filter(
+                LinehaulManifest.vehicle_id == vehicle.id,
+                LinehaulManifest.status.in_([
+                    ManifestStatus.SEALED,
+                    ManifestStatus.IN_TRANSIT,
+                ])
+            ).first()
+            if active_manifest:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Cannot place vehicle into maintenance: actively assigned to Linehaul Manifest {active_manifest.manifest_number}"
                 )
 
             vehicle.status = VehicleStatus.MAINTENANCE

@@ -8,7 +8,8 @@ from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.models.parcel import Parcel
 from app.models.assignment import DeliveryAssignment
-from app.models.enums import UserRole, ParcelStatus, AssignmentStatus
+from app.models.linehaul import LinehaulManifest
+from app.models.enums import UserRole, ParcelStatus, AssignmentStatus, ManifestStatus
 from app.schemas.organization import OrganizationCreate, OrganizationUpdate
 from app.schemas.branch import BranchCreate, BranchUpdate, BranchDashboardResponse
 
@@ -177,6 +178,23 @@ class BranchService:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Cannot deactivate branch: {active_assignments} active delivery assignment(s) are in progress by personnel stationed at this branch"
+            )
+
+        # 3. Check for active linehaul manifests originating from or destined to this branch
+        active_manifests = db.query(LinehaulManifest).filter(
+            (LinehaulManifest.origin_branch_id == branch.id) | (LinehaulManifest.dest_branch_id == branch.id),
+            LinehaulManifest.status.in_([
+                ManifestStatus.DRAFT,
+                ManifestStatus.SEALED,
+                ManifestStatus.IN_TRANSIT,
+                ManifestStatus.ARRIVED,
+            ])
+        ).count()
+
+        if active_manifests > 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Cannot deactivate branch: {active_manifests} active linehaul transfer manifest(s) involve this branch"
             )
 
         branch.is_active = False
