@@ -1,10 +1,10 @@
 # LogiFlows — Master Development Progress Tracker (Stage 1)
 
 **Last Updated:** November 12, 2026  
-**Current Phase:** Phase 14 (IMPLEMENTED & LOCALLY VERIFIED) $\rightarrow$ Phase 15 (READY AFTER MERGE)  
+**Current Phase:** Phase 14 (COMPLETE & CI VERIFIED) $\rightarrow$ Phase 15 (READY AFTER MERGE)  
 **Base Branch:** `hardening/phase-11`  
 **Active Work Branch:** `phase-14/linehaul-transfers`  
-**Pull Request:** Pending creation (`phase-14/linehaul-transfers` $\rightarrow$ `hardening/phase-11`)  
+**Pull Request:** [PR #6: Phase 14 Branch-to-Branch Linehaul Transfers, Consolidation Bags & Reconciliation](https://github.com/V-Balamurugan/logiflows-courier-system/pull/6)  
 
 ---
 
@@ -31,7 +31,7 @@
 | **Phase 11** | System Hardening & Verification | **COMPLETE** | `hardening/phase-11.10-final-verification` / [PR #3](https://github.com/V-Balamurugan/logiflows-courier-system/pull/3) | **PASSED (Green)** |
 | **Phase 12** | Core Logistics Business Workflows (12.1–12.7) | **COMPLETE** | `phase-12/core-workflows` / [PR #4](https://github.com/V-Balamurugan/logiflows-courier-system/pull/4) | **MERGED into hardening/phase-11** |
 | **Phase 13** | Tracking & QR Custody Operations (13.1–13.6) | **COMPLETE** | `phase-13/tracking-custody` / [PR #5](https://github.com/V-Balamurugan/logiflows-courier-system/pull/5) | **MERGED into hardening/phase-11** |
-| **Phase 14** | Branch-to-Branch Linehaul Transfers & Operations | **COMPLETE (Local Gate Passed)** | `phase-14/linehaul-transfers` / PR Pending | **CI Pending Push** |
+| **Phase 14** | Branch-to-Branch Linehaul Transfers & Operations | **COMPLETE (CI Verified)** | `phase-14/linehaul-transfers` / [PR #6](https://github.com/V-Balamurugan/logiflows-courier-system/pull/6) | **PASSED ([Run #43171799190](https://github.com/V-Balamurugan/logiflows-courier-system/actions/runs/43171799190))** |
 | **Phase 15** | Dynamic Route Optimization & Map Integration | NOT STARTED | — | — |
 | **Phase 16** | AI Delay Prediction & Machine Learning | NOT STARTED | — | — |
 | **Phase 17** | Real-Time Notifications & n8n Workflows | NOT STARTED | — | — |
@@ -104,6 +104,7 @@
 | **pip-audit** | `.\backend\venv\Scripts\pip-audit.exe` | **PASSED** | `No known vulnerabilities found` (Exit code 0) |
 | **npm audit** | `npm --prefix frontend audit --audit-level=high` | **PASSED** | `found 0 vulnerabilities` (Exit code 0) |
 | **Docker Compose** | `docker compose config -q` | **PASSED** | Exit code 0 |
+| **GitHub Actions CI (PG16 + E2E)** | [CI Run #43171799190](https://github.com/V-Balamurugan/logiflows-courier-system/actions/runs/43171799190) | **PASSED** | All 6 workflow jobs passed: PG16 `alembic upgrade head` & `check` (0 drift), PG16 Pytest `106 passed` (`90.68%` cov), Frontend CI, Audits, Playwright `48 passed`, CI Gate |
 
 ## 6. Phase 14 Modules & Acceptance Criteria Audit
 
