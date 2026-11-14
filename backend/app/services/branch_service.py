@@ -9,7 +9,8 @@ from app.models.vehicle import Vehicle
 from app.models.parcel import Parcel
 from app.models.assignment import DeliveryAssignment
 from app.models.linehaul import LinehaulManifest
-from app.models.enums import UserRole, ParcelStatus, AssignmentStatus, ManifestStatus
+from app.models.route import DeliveryRoute
+from app.models.enums import UserRole, ParcelStatus, AssignmentStatus, ManifestStatus, RouteStatus
 from app.schemas.organization import OrganizationCreate, OrganizationUpdate
 from app.schemas.branch import BranchCreate, BranchUpdate, BranchDashboardResponse
 
@@ -195,6 +196,22 @@ class BranchService:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Cannot deactivate branch: {active_manifests} active linehaul transfer manifest(s) involve this branch"
+            )
+
+        # 4. Check for active delivery routes anchored to this branch
+        active_routes = db.query(DeliveryRoute).filter(
+            DeliveryRoute.branch_id == branch.id,
+            DeliveryRoute.status.in_([
+                RouteStatus.PLANNED,
+                RouteStatus.DISPATCHED,
+                RouteStatus.IN_PROGRESS,
+            ])
+        ).count()
+
+        if active_routes > 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Cannot deactivate branch: {active_routes} active delivery route(s) are anchored to this branch"
             )
 
         branch.is_active = False
