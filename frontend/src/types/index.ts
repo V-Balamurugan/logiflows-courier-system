@@ -437,3 +437,126 @@ export interface DashboardStats {
     deliveries_completed: number;
   }[];
 }
+
+export type RouteStatus = 'PLANNED' | 'DISPATCHED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+export type RouteStopType = 'PICKUP' | 'DELIVERY';
+export type RouteStopStatus = 'PENDING' | 'EN_ROUTE' | 'ARRIVED' | 'COMPLETED' | 'SKIPPED' | 'FAILED';
+export type RouteObjective = 'FASTEST' | 'SHORTEST' | 'BALANCED' | 'MANUAL';
+
+export interface RouteStopInput {
+  parcel_id?: number;
+  stop_type: RouteStopType;
+  location_name?: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
+  notes?: string;
+}
+
+export interface RoutePreviewStop {
+  sequence_order: number;
+  parcel_id?: number;
+  tracking_number?: string;
+  stop_type: RouteStopType;
+  location_name: string;
+  address?: string;
+  latitude: number;
+  longitude: number;
+  coords_source: string;
+  parcel_weight_kg: number;
+  distance_from_prev_km: number;
+  eta_minutes_from_start: number;
+}
+
+export interface RoutePreviewResponse {
+  branch_id: number;
+  branch_name: string;
+  start_latitude: number;
+  start_longitude: number;
+  vehicle_id?: number;
+  vehicle_number?: string;
+  vehicle_max_weight_kg?: number;
+  total_weight_kg: number;
+  utilization_pct?: number;
+  capacity_exceeded: boolean;
+  objective: RouteObjective;
+  return_to_hub: boolean;
+  provider_used: string;
+  is_fallback: boolean;
+  fallback_reason?: string;
+  baseline_distance_km: number;
+  total_distance_km: number;
+  distance_saved_km: number;
+  distance_saved_pct: number;
+  estimated_duration_min: number;
+  geometry_points: [number, number][];
+  stops: RoutePreviewStop[];
+}
+
+export interface RouteStop {
+  id: number;
+  route_id: number;
+  parcel_id?: number;
+  tracking_number?: string;
+  receiver_name?: string;
+  parcel_weight_kg?: number;
+  assignment_id?: number;
+  sequence_order: number;
+  stop_type: RouteStopType;
+  status: RouteStopStatus;
+  is_active: boolean;
+  location_name: string;
+  address?: string;
+  latitude: number;
+  longitude: number;
+  coords_source: string;
+  distance_from_prev_km: number;
+  eta_minutes_from_start: number;
+  estimated_arrival_at?: string;
+  arrived_at?: string;
+  completed_at?: string;
+  failure_reason?: string;
+  notes?: string;
+}
+
+export interface DeliveryRoute {
+  id: number;
+  route_code: string;
+  organization_id: number;
+  branch_id: number;
+  branch_name?: string;
+  vehicle_id?: number;
+  vehicle_number?: string;
+  vehicle_type?: string;
+  vehicle_max_weight_kg?: number;
+  driver_id?: number;
+  driver_name?: string;
+  status: RouteStatus;
+  is_active_dispatch: boolean;
+  optimization_objective: RouteObjective;
+  provider_used: string;
+  is_fallback: boolean;
+  fallback_reason?: string;
+  return_to_hub: boolean;
+  start_latitude?: number;
+  start_longitude?: number;
+  total_distance_km: number;
+  baseline_distance_km: number;
+  distance_saved_km: number;
+  distance_saved_pct: number;
+  estimated_duration_min: number;
+  total_weight_kg: number;
+  utilization_pct?: number;
+  total_stops: number;
+  completed_stops: number;
+  geometry_points: [number, number][];
+  notes?: string;
+  version_id: number;
+  dispatched_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  cancelled_at?: string;
+  created_at: string;
+  updated_at?: string;
+  stops: RouteStop[];
+}

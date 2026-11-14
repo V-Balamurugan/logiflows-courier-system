@@ -20,6 +20,12 @@ import {
   LinehaulManifest,
   ManifestReconciliationResult,
   TransferDiscrepancy,
+  RouteObjective,
+  RoutePreviewResponse,
+  RouteStatus,
+  RouteStopInput,
+  RouteStopStatus,
+  DeliveryRoute,
 } from '../types';
 
 export const organizationApi = {
@@ -470,6 +476,95 @@ export const linehaulApi = {
     data: { status?: string; resolution_notes: string; release_parcel_to_dest?: boolean }
   ): Promise<TransferDiscrepancy> => {
     const res = await api.patch<TransferDiscrepancy>(`/linehaul/discrepancies/${id}`, data);
+    return res.data;
+  },
+};
+
+export const routeApi = {
+  preview: async (data: {
+    branch_id: number;
+    vehicle_id?: number;
+    objective?: RouteObjective;
+    provider?: string;
+    return_to_hub?: boolean;
+    parcel_ids?: number[];
+    stops?: RouteStopInput[];
+  }): Promise<RoutePreviewResponse> => {
+    const res = await api.post<RoutePreviewResponse>('/routes/preview', data);
+    return res.data;
+  },
+  list: async (params?: {
+    branch_id?: number;
+    status?: RouteStatus;
+    vehicle_id?: number;
+    driver_id?: number;
+  }): Promise<DeliveryRoute[]> => {
+    const res = await api.get<DeliveryRoute[]>('/routes', { params });
+    return res.data;
+  },
+  get: async (id: number): Promise<DeliveryRoute> => {
+    const res = await api.get<DeliveryRoute>(`/routes/${id}`);
+    return res.data;
+  },
+  create: async (data: {
+    branch_id: number;
+    vehicle_id?: number;
+    driver_id?: number;
+    objective?: RouteObjective;
+    provider?: string;
+    return_to_hub?: boolean;
+    parcel_ids?: number[];
+    stops?: RouteStopInput[];
+    notes?: string;
+  }): Promise<DeliveryRoute> => {
+    const res = await api.post<DeliveryRoute>('/routes', data);
+    return res.data;
+  },
+  reoptimize: async (
+    id: number,
+    data: {
+      objective?: RouteObjective;
+      provider?: string;
+      return_to_hub?: boolean;
+      manual_stop_ids?: number[];
+      expected_version_id?: number;
+    }
+  ): Promise<DeliveryRoute> => {
+    const res = await api.post<DeliveryRoute>(`/routes/${id}/reoptimize`, data);
+    return res.data;
+  },
+  dispatch: async (
+    id: number,
+    data: {
+      driver_id?: number;
+      vehicle_id?: number;
+      expected_version_id?: number;
+      notes?: string;
+    }
+  ): Promise<DeliveryRoute> => {
+    const res = await api.post<DeliveryRoute>(`/routes/${id}/dispatch`, data);
+    return res.data;
+  },
+  start: async (id: number): Promise<DeliveryRoute> => {
+    const res = await api.post<DeliveryRoute>(`/routes/${id}/start`);
+    return res.data;
+  },
+  updateStop: async (
+    routeId: number,
+    stopId: number,
+    data: {
+      status: RouteStopStatus;
+      latitude?: number;
+      longitude?: number;
+      failure_reason?: string;
+      notes?: string;
+    }
+  ): Promise<DeliveryRoute> => {
+    const res = await api.post<DeliveryRoute>(`/routes/${routeId}/stops/${stopId}/update`, data);
+    return res.data;
+  },
+  cancel: async (id: number, cancellation_reason: string): Promise<DeliveryRoute> => {
+    const res = await api.post<DeliveryRoute>(`/routes/${id}/cancel`, { cancellation_reason });
     return res.data;
   },
 };
