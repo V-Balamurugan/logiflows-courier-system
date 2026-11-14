@@ -148,3 +148,19 @@ This document records architectural decisions, assumptions, and design patterns 
   - Destination inward reconciliation strictly verifies expected tracking numbers, marks damaged/missing items as `ParcelStatus.ON_HOLD`, creates `TransferDiscrepancy` records (including `EXCESS` and `SEAL_BROKEN`), and supports audited discrepancy resolution with optional destination hold release.
 - **Status:** Adopted & Verified (Phase 14).
 
+---
+
+## ADR-013: Pluggable Routing Provider Adapter, 2-Opt Local Optimizer & Multi-Stop Delivery Routes
+
+- **Context:** Phase 15 introduces dynamic multi-stop route optimization and Leaflet map integration. External routing providers (OpenRouteService, OSRM) require outbound network access or optional API keys and must degrade gracefully without breaking branch dispatch when offline, rate-limited, or unconfigured.
+- **Decision:**
+  - Defined an abstract routing provider adapter interface (`RoutingEngine` in `backend/app/services/routing_providers.py`) supporting:
+    1. `OpenRouteServiceAdapter` (optional env `ORS_API_KEY`, configurable `ORS_BASE_URL`, timeouts and exponential-backoff retries).
+    2. `OSRMAdapter` (configurable `OSRM_BASE_URL`, public/self-hosted OSRM Trip & Route APIs).
+    3. `LocalHaversineOptimizer` (Nearest-Neighbor + 2-opt TSP refinement over Haversine distances with road tortuosity factor `1.30x` and `VehicleType` speed profiles, plus `MANUAL` sequence evaluation).
+  - Configured requests default to graceful degradation: missing API keys, network timeouts, or HTTP 429/5xx failures automatically fall back to `LocalHaversineOptimizer` while explicitly returning `is_fallback=True` and `fallback_reason` (never silently fabricating external responses).
+  - Added persisted `DeliveryRoute` (`version_id` optimistic locking + partial unique index `uq_active_vehicle_route`) and `RouteStop` (partial unique index `uq_active_parcel_on_route`), plus optional origin/destination coordinate fields on `Parcel`. Stops without explicit coordinates disclose `coords_source="BRANCH_VICINITY_ESTIMATE"` transparently.
+  - Added cross-module conflict guards across `BranchService`, `VehicleService`, `LinehaulService`, and atomic dispatch synchronization with `DeliveryAssignment` and `ShipmentStateMachine`.
+- **Status:** Adopted & Verified (Phase 15).
+
+
