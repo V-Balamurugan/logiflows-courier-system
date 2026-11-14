@@ -1,10 +1,10 @@
 # LogiFlows — Master Development Progress Tracker (Stage 1)
 
-**Last Updated:** November 12, 2026  
-**Current Phase:** Phase 14 (COMPLETE & CI VERIFIED) $\rightarrow$ Phase 15 (READY AFTER MERGE)  
-**Base Branch:** `hardening/phase-11`  
-**Active Work Branch:** `phase-14/linehaul-transfers`  
-**Pull Request:** [PR #6: Phase 14 Branch-to-Branch Linehaul Transfers, Consolidation Bags & Reconciliation](https://github.com/V-Balamurugan/logiflows-courier-system/pull/6)  
+**Last Updated:** November 14, 2026  
+**Current Phase:** Phase 15 (`COMPLETE` — Pending PR Merge) — Dynamic Route Optimization & Map Integration  
+**Base Branch:** `hardening/phase-11` (`69e7cf2`)  
+**Active Work Branch:** `phase-15/route-optimization`  
+**Pull Request:** Pending (`phase-15/route-optimization` $\rightarrow$ `hardening/phase-11`)  
 
 ---
 
@@ -31,9 +31,14 @@
 | **Phase 11** | System Hardening & Verification | **COMPLETE** | `hardening/phase-11.10-final-verification` / [PR #3](https://github.com/V-Balamurugan/logiflows-courier-system/pull/3) | **PASSED (Green)** |
 | **Phase 12** | Core Logistics Business Workflows (12.1–12.7) | **COMPLETE** | `phase-12/core-workflows` / [PR #4](https://github.com/V-Balamurugan/logiflows-courier-system/pull/4) | **MERGED into hardening/phase-11** |
 | **Phase 13** | Tracking & QR Custody Operations (13.1–13.6) | **COMPLETE** | `phase-13/tracking-custody` / [PR #5](https://github.com/V-Balamurugan/logiflows-courier-system/pull/5) | **MERGED into hardening/phase-11** |
-| **Phase 14** | Branch-to-Branch Linehaul Transfers & Operations | **COMPLETE (CI Verified)** | `phase-14/linehaul-transfers` / [PR #6](https://github.com/V-Balamurugan/logiflows-courier-system/pull/6) | **PASSED ([Run #43171799190](https://github.com/V-Balamurugan/logiflows-courier-system/actions/runs/43171799190))** |
-| **Phase 15** | Dynamic Route Optimization & Map Integration | NOT STARTED | — | — |
+| **Phase 14** | Branch-to-Branch Linehaul Transfers & Operations | **COMPLETE** | `phase-14/linehaul-transfers` / [PR #6](https://github.com/V-Balamurugan/logiflows-courier-system/pull/6) | **MERGED into hardening/phase-11** |
+| **Phase 15** | Dynamic Route Optimization & Map Integration | **COMPLETE** | `phase-15/route-optimization` | Pending PR |
 | **Phase 16** | AI Delay Prediction & Machine Learning | NOT STARTED | — | — |
+| **Phase 17** | Real-Time Notifications & n8n Workflows | NOT STARTED | — | — |
+| **Phase 18** | Billing, Invoicing & Financial Audits | NOT STARTED | — | — |
+| **Phase 19** | Business Intelligence, Analytics & Reporting | NOT STARTED | — | — |
+| **Phase 20** | Multi-Courier External API Integration | NOT STARTED | — | — |
+| **Phase 21** | Production Deployment, Observability & Release | NOT STARTED | — | — |
 | **Phase 17** | Real-Time Notifications & n8n Workflows | NOT STARTED | — | — |
 | **Phase 18** | Billing, Invoicing & Financial Audits | NOT STARTED | — | — |
 | **Phase 19** | Business Intelligence, Analytics & Reporting | NOT STARTED | — | — |
@@ -123,52 +128,51 @@
 - [x] **14.6 Frontend Linehaul UI & Tests:**
   - Built `LinehaulPage.tsx` (Manifests, Consolidation Bags, Discrepancies tabs + responsive `p-4 sm:p-12` empty/loading panels verified on 390px Mobile Chrome + modal workflows), `linehaulApi`, `Badge.tsx`, `Sidebar.tsx`, and `AppRoutes.tsx` (`/linehaul`), covered by `Phase14Linehaul.test.tsx`, `LinehaulPage.test.tsx`, and E2E `Journey 16`.
 
-## 7. Next Steps for Phase 15
+## 7. Phase 15 Verified Deliverables & Evidence
 
-1. Review and merge Phase 14 PR (`phase-14/linehaul-transfers` $\rightarrow$ `hardening/phase-11`) once user authorizes merge.
-2. Create branch `phase-15/route-optimization` from verified `hardening/phase-11` head.
-3. Implement Phase 15: Dynamic Route Optimization & Map Integration.
+### Concrete Evidence Summary (Section 8 Global Phase Gate)
 
-
----
-
-## 4. Phase 12 Modules & Acceptance Criteria Audit
-
-- [x] **12.1 Organization Management:**
-  - `POST /organizations/register`: Atomic organization and initial Org Admin user registration with transactional rollback on conflict.
-  - Suspended organization (`is_active=False`) enforces hard 403 lockout at login and token authentication dependencies.
-  - Tenant-scoped settings validation and Super Admin status toggling.
-- [x] **12.2 Branch Management:**
-  - Branch deactivation protection: Soft-deletion blocked with HTTP 409 Conflict if active parcels or assignments exist.
-  - Unique branch codes enforced per organization.
-  - Branch Manager scoping strictly restricts views to their assigned branch.
-  - Real-time Branch Sorting Hub metrics (`GET /branches/{id}/dashboard`).
-- [x] **12.3 Employee Management:**
-  - Cryptographic single-use invite tokens (`POST /employees/{id}/invite`, `POST /employees/accept-invite`) with automatic `jti` revocation in `revoked_tokens`.
-  - Strict privilege ceiling enforcement (`SUPER_ADMIN > ORG_ADMIN > BRANCH_MANAGER > DELIVERY_AGENT > CUSTOMER`).
-  - Deactivated staff (`is_active=False`) immediately locked out of all authenticated endpoints.
-  - Employee workload and assignment analytics (`GET /employees/{id}/dashboard`).
-- [x] **12.4 Vehicle Management:**
-  - Vehicle registration numbers normalized (whitespace/hyphen stripped, uppercase canonical).
-  - Maintenance locking (`PATCH /vehicles/{id}/maintenance`): Active dispatches block maintenance state with HTTP 409 Conflict.
-  - Payload and volumetric capacity limits enforced with overlapping assignment conflict prevention.
-- [x] **12.5 Customer Management:**
-  - Public registration (`POST /auth/register`) strictly forbids role or organization injection (`extra="forbid"`), always provisioning `CUSTOMER`.
-  - Customer Address Book & Corporate Profile (`GET /customers/me/profile`, `PUT /customers/me/profile`).
-- [x] **12.6 Parcel Booking:**
-  - Deterministic `Decimal` pricing engine with service type multipliers.
-  - Postal code validation format regex `^\d{4,10}$` rejecting malformed inputs with HTTP 422.
-  - Prohibited cargo filter in notes rejecting contraband materials with HTTP 422.
-  - Physical payload bounds (weight $\le$ 500 kg, dimensions $\le$ 300 cm) and geographic hub serviceability check.
-- [x] **12.7 Delivery Assignment:**
-  - Atomic double-dispatch prevention under concurrency (`uq_active_parcel_assignment`).
-  - Assignment cancellation (`POST /assignments/{id}/cancel`): Restores parcel to hub inventory, vehicle to `AVAILABLE`, and logs audit trail.
-  - Explainable dispatch recommendation engine (`GET /assignments/suggestions/{parcel_id}`): Workload utilization scores and vehicle capacity fit.
+| Gate / Command | Command Executed | Result | Evidence |
+| :--- | :--- | :--- | :--- |
+| **Alembic Drift** | `..\backend\venv\Scripts\python.exe -m alembic check` | **PASSED** | `No new upgrade operations detected.` (Exit code 0, single head `a7d6f19c882b`) |
+| **Backend Pytest** | `pytest app/tests --cov=app --cov-report=term-missing` | **PASSED** | `117 passed, 4 warnings in 28.36s; TOTAL Coverage: 90%` (`7838` stmts, `781` miss; Target $\ge 80\%$) |
+| **Frontend Vitest** | `npm --prefix frontend test` | **PASSED** | `Test Files 7 passed (7)`, `Tests 39 passed (39)` in `21.47s` |
+| **Oxlint** | `npm --prefix frontend run lint` | **PASSED** | `Found 57 warnings and 0 errors.` (45 files) |
+| **Type Check & Build** | `npm --prefix frontend run build` | **PASSED** | `tsc -b && vite build` exited 0 (`2191 modules transformed`, `built in 3.61s`) |
+| **Playwright E2E** | `Set-Location frontend; npx playwright test` | **PASSED** | `51 passed (2.2m)` across Desktop Chrome (17), Mobile Chrome (17), Tablet (17) |
+| **pip-audit** | `.\backend\venv\Scripts\pip-audit.exe` | **PASSED** | `No known vulnerabilities found` (Exit code 0; dnspython $\ge 2.9.2$) |
+| **npm audit** | `npm --prefix frontend audit --audit-level=high` | **PASSED** | `found 0 vulnerabilities` (Exit code 0) |
+| **Docker Compose** | `docker compose config -q` | **PASSED** | Exit code 0, valid configuration graph |
 
 ---
 
-## 5. Next Steps for Phase 13
+## 8. Phase 15 Modules & Acceptance Criteria Audit
 
-1. Review and merge PR #4 (`phase-12/core-workflows`) into `hardening/phase-11`.
-2. Create branch `phase-13/tracking-custody` from verified head.
-3. Implement Phase 13: Tracking & QR Custody Operations (Modules 13.1–13.6).
+- [x] **15.1 Pluggable Routing Engine & Config:**
+  - Implemented abstract `RoutingEngine` adapter pattern with `LocalHaversineOptimizer` (Nearest-Neighbor + 2-opt TSP heuristics with `1.30x` road tortuosity factor, vehicle speed profiles, and `MANUAL` sequence support), `OpenRouteServiceAdapter`, and `OSRMAdapter`.
+  - Configured graceful offline degradation: missing keys or rate limits fall back automatically with explicit `is_fallback=True` and `fallback_reason`.
+- [x] **15.2 Data Schema & Migration (`a7d6f19c882b`):**
+  - Added `delivery_routes` (with `version_id` optimistic locking and partial unique index `uq_active_vehicle_route`), `route_stops` (with partial unique index `uq_active_parcel_on_route`), and nullable `origin_lat/origin_lng/dest_lat/dest_lng` on `parcels`.
+  - Supporting enums: `DeliveryRouteStatus`, `RouteStopStatus`, `RouteStopType`, `RouteObjective`, `CoordsSource`.
+- [x] **15.3 Route Service, Concurrency & State Machine Sync:**
+  - Full CRUD & lifecycle management: `preview_route`, `create_route`, `list_routes`, `get_route`, `reoptimize_route`, `dispatch_route`, `start_route`, `update_stop_status`, and `cancel_route`.
+  - Concurrency controls: `version_id` optimistic locking on route mutations returning HTTP 409 `CONFLICT_OPTIMISTIC_LOCK_FAILED`, atomic CAS vehicle locking (`IN_USE`) on dispatch, and multi-stop vehicle retention in `IN_TRANSIT` until all stops reach terminal status.
+  - Cross-module conflict guards preventing branch soft-deletion, vehicle maintenance toggles, linehaul packing, and duplicate last-mile assignments on active route entities.
+- [x] **15.4 FastAPI Router & Permissions:**
+  - Endpoints under `/api/v1/routes`: preview, create, list, detail, reoptimize, dispatch, start, update-stop, and cancel.
+  - Role-based scoping: `require_branch_manager_or_higher` for planner/dispatch/cancel actions; `require_staff` for stop execution; strict cross-tenant isolation returning HTTP 404.
+- [x] **15.5 Frontend Interactive Map & Planner Workbench:**
+  - Enhanced `LeafletMap.tsx`: numbered stop markers with status styling, depot anchor marker, route polyline, and HTML sanitization.
+  - Built `RoutesPage.tsx`: split workspace with KPI summary cards, filterable route list, interactive Route Planner with eligible parcel selection, custom GPS waypoints, preview metrics, manual stop reordering, dispatch modal, stop execution modal, and cancel modal.
+  - Responsive layout: mobile drawer navigation on viewports below 768px, ensuring full layout usability on 390px mobile viewports.
+- [x] **15.6 Verification & E2E Testing:**
+  - Unit/integration tests: `test_routing_providers.py` (5 tests), `test_phase15_routes.py` (6 comprehensive test suites covering all edge cases), `RoutesAndLeaflet.test.tsx` (8 tests), `Phase15Routes.test.tsx` (4 tests).
+  - Playwright E2E: `Journey 17` verified across Desktop Chrome, Mobile Chrome, and Tablet as part of the 51-test suite.
+
+---
+
+## 9. Next Steps for Phase 16
+
+1. Review and merge Phase 15 PR (`phase-15/route-optimization` $\rightarrow$ `hardening/phase-11`) once user authorizes merge.
+2. Create branch `phase-16/delay-prediction` from verified `hardening/phase-11` head.
+3. Implement Phase 16: AI Delay Prediction & Machine Learning (feature engineering, scikit-learn pipeline, model inference service, and predictive delay intelligence UI).

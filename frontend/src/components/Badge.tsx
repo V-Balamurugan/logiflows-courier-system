@@ -10,14 +10,18 @@ export const Badge: React.FC<BadgeProps> = ({ status }) => {
     switch (status) {
       // Parcel Statuses
       case 'BOOKED':
+      case 'DISPATCHED':
         return 'bg-blue-50 text-blue-700 border-blue-200';
       case 'PICKUP_SCHEDULED':
       case 'PICKED_UP':
+      case 'EN_ROUTE':
         return 'bg-indigo-50 text-indigo-700 border-indigo-200';
       case 'AT_ORIGIN_BRANCH':
       case 'AT_DESTINATION_BRANCH':
+      case 'PENDING':
         return 'bg-amber-50 text-amber-700 border-amber-200';
       case 'IN_TRANSIT':
+      case 'IN_PROGRESS':
       case 'OUT_FOR_DELIVERY':
         return 'bg-purple-50 text-purple-700 border-purple-200';
       case 'DELIVERED':
@@ -35,6 +39,7 @@ export const Badge: React.FC<BadgeProps> = ({ status }) => {
       case 'DAMAGED':
       case 'SEAL_BROKEN':
       case 'CRITICAL':
+      case 'FAILED':
         return 'bg-rose-50 text-rose-700 border-rose-200';
       case 'RETURN_TO_ORIGIN':
       case 'ON_HOLD':
@@ -50,6 +55,8 @@ export const Badge: React.FC<BadgeProps> = ({ status }) => {
       case 'DRAFT':
       case 'OPEN':
       case 'EXPECTED':
+      case 'PLANNED':
+      case 'SKIPPED':
         return 'bg-slate-100 text-slate-700 border-slate-300';
       
       // Roles

@@ -55,6 +55,19 @@ from app.schemas.custody import (
 from app.schemas.analytics import (
     DashboardStatsResponse,
 )
+from app.schemas.route import (
+    RouteStopInput,
+    RoutePreviewRequest,
+    RouteCreateRequest,
+    RouteReoptimizeRequest,
+    RouteDispatchRequest,
+    RouteStopUpdateRequest,
+    RouteCancelRequest,
+    RoutePreviewStop,
+    RoutePreviewResponse,
+    RouteStopResponse,
+    DeliveryRouteResponse,
+)
 
 __all__ = [
     "Token",
@@ -94,5 +107,16 @@ __all__ = [
     "CustodyScanRequest",
     "CustodyScanResponse",
     "DashboardStatsResponse",
+    "RouteStopInput",
+    "RoutePreviewRequest",
+    "RouteCreateRequest",
+    "RouteReoptimizeRequest",
+    "RouteDispatchRequest",
+    "RouteStopUpdateRequest",
+    "RouteCancelRequest",
+    "RoutePreviewStop",
+    "RoutePreviewResponse",
+    "RouteStopResponse",
+    "DeliveryRouteResponse",
 ]
 
