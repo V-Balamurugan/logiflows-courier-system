@@ -31,6 +31,10 @@ class Parcel(Base):
     receiver_city = Column(String(100), nullable=False)
     receiver_state = Column(String(100), nullable=False)
     receiver_pincode = Column(String(20), nullable=False)
+    origin_latitude = Column(Float, nullable=True)
+    origin_longitude = Column(Float, nullable=True)
+    dest_latitude = Column(Float, nullable=True)
+    dest_longitude = Column(Float, nullable=True)
 
     # Physical Attributes
     weight_kg = Column(Float, nullable=False)
@@ -72,4 +76,5 @@ class Parcel(Base):
     tracking_history = relationship("TrackingHistory", back_populates="parcel", cascade="all, delete-orphan", order_by="TrackingHistory.created_at.asc()")
     custody_scans = relationship("CustodyScan", back_populates="parcel", cascade="all, delete-orphan", order_by="CustodyScan.created_at.desc()")
     assignments = relationship("DeliveryAssignment", back_populates="parcel", cascade="all, delete-orphan")
+    route_stops = relationship("RouteStop", back_populates="parcel")
 

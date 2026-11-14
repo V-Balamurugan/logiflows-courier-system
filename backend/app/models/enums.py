@@ -126,3 +126,32 @@ class DiscrepancyStatus(str, Enum):
     RESOLVED = "RESOLVED"
 
 
+class RouteStatus(str, Enum):
+    PLANNED = "PLANNED"
+    DISPATCHED = "DISPATCHED"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+
+
+class RouteStopType(str, Enum):
+    PICKUP = "PICKUP"
+    DELIVERY = "DELIVERY"
+
+
+class RouteStopStatus(str, Enum):
+    PENDING = "PENDING"
+    EN_ROUTE = "EN_ROUTE"
+    ARRIVED = "ARRIVED"
+    COMPLETED = "COMPLETED"
+    SKIPPED = "SKIPPED"
+    FAILED = "FAILED"
+
+
+class RouteObjective(str, Enum):
+    FASTEST = "FASTEST"
+    SHORTEST = "SHORTEST"
+    BALANCED = "BALANCED"
+    MANUAL = "MANUAL"
+
+
