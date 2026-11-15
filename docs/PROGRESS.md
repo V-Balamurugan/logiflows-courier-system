@@ -1,10 +1,10 @@
 # LogiFlows — Master Development Progress Tracker (Stage 1)
 
-**Last Updated:** November 14, 2026  
-**Current Phase:** Phase 15 (`COMPLETE` — Pending PR Merge) — Dynamic Route Optimization & Map Integration  
-**Base Branch:** `hardening/phase-11` (`69e7cf2`)  
-**Active Work Branch:** `phase-15/route-optimization`  
-**Pull Request:** Pending (`phase-15/route-optimization` $\rightarrow$ `hardening/phase-11`)  
+**Last Updated:** November 15, 2026  
+**Current Phase:** Phase 15 Improvement (`COMPLETE` — Verified Quality Gates) — Advanced Route Optimization & Platform Integration  
+**Base Branch:** `hardening/phase-11`  
+**Active Work Branch:** `phase-15/route-optimization-improvements`  
+**Pull Request:** Ready (`phase-15/route-optimization-improvements` $\rightarrow$ `hardening/phase-11`)  
 
 ---
 
@@ -32,13 +32,65 @@
 | **Phase 12** | Core Logistics Business Workflows (12.1–12.7) | **COMPLETE** | `phase-12/core-workflows` / [PR #4](https://github.com/V-Balamurugan/logiflows-courier-system/pull/4) | **MERGED into hardening/phase-11** |
 | **Phase 13** | Tracking & QR Custody Operations (13.1–13.6) | **COMPLETE** | `phase-13/tracking-custody` / [PR #5](https://github.com/V-Balamurugan/logiflows-courier-system/pull/5) | **MERGED into hardening/phase-11** |
 | **Phase 14** | Branch-to-Branch Linehaul Transfers & Operations | **COMPLETE** | `phase-14/linehaul-transfers` / [PR #6](https://github.com/V-Balamurugan/logiflows-courier-system/pull/6) | **MERGED into hardening/phase-11** |
-| **Phase 15** | Dynamic Route Optimization & Map Integration | **COMPLETE** | `phase-15/route-optimization` | Pending PR |
+| **Phase 15** | Advanced Route Optimization & Platform Integration | **COMPLETE** | `phase-15/route-optimization-improvements` | Ready for PR |
 | **Phase 16** | AI Delay Prediction & Machine Learning | NOT STARTED | — | — |
 | **Phase 17** | Real-Time Notifications & n8n Workflows | NOT STARTED | — | — |
 | **Phase 18** | Billing, Invoicing & Financial Audits | NOT STARTED | — | — |
 | **Phase 19** | Business Intelligence, Analytics & Reporting | NOT STARTED | — | — |
 | **Phase 20** | Multi-Courier External API Integration | NOT STARTED | — | — |
 | **Phase 21** | Production Deployment, Observability & Release | NOT STARTED | — | — |
+
+---
+
+## 3. Phase 15 Improvement Verified Deliverables & Evidence
+
+### Concrete Evidence Summary (Global Quality Gates)
+
+| Gate / Command | Command Executed | Result | Evidence |
+| :--- | :--- | :--- | :--- |
+| **Alembic Drift** | `cd backend; alembic check` | **PASSED** | `No new upgrade operations detected.` (Head `c8f1a2b3c4d5`, 0 drift) |
+| **Backend Pytest** | `pytest --cov=app --cov-report=term-missing` | **PASSED** | `144 passed, 6 warnings in 54.08s`; `TOTAL Coverage: 87%` (`6327` stmts, `848` missed; Routing services 80–100%) |
+| **Frontend Vitest** | `npm --prefix frontend run test -- --run` | **PASSED** | `Test Files: 8 passed (8)`; `Tests: 41 passed (41)` in 12.86s |
+| **Type Check & Build** | `npm --prefix frontend run build` | **PASSED** | `tsc -b && vite build` exited 0 (`2191 modules transformed`, `built in 2.19s`) |
+| **Oxlint** | `npm --prefix frontend run lint` | **PASSED** | `Found 57 warnings and 0 errors.` (46 files) |
+| **pip-audit** | `.\backend\venv\Scripts\pip-audit.exe` | **PASSED** | `No known vulnerabilities found` |
+| **npm audit** | `npm --prefix frontend audit --audit-level=high` | **PASSED** | `found 0 vulnerabilities` |
+| **Playwright E2E** | `npm --prefix frontend run test:e2e` | **PASSED** | `51 passed (1.2m)` across Desktop Chrome (17), Mobile Chrome (17), Tablet (17) |
+| **Docker Compose** | `docker compose config -q` | **PASSED** | Exit code 0, valid dependency graph |
+
+---
+
+## 4. Phase 15 Improvement Modules & Acceptance Criteria Audit
+
+- [x] **15.7 Normalized Schema & Provider Modularization:**
+  - Standardized Pydantic contract `RoutePlanResult` with turn-by-turn steps, coordinate quality summary, and road geometry.
+  - Zero-fabrication guarantee: Local fallback strictly returns `geometry=None`; UI displays an "Estimated (No road geometry)" notice banner instead of synthesizing chords.
+  - Stateful Circuit Breaker with 3-failure threshold, 30s recovery window, and graceful local degradation.
+- [x] **15.8 Coordinate Provenance & Address Geocoding:**
+  - `GeocodingService` with LRU/TTL caching, string normalization (`normalize_address`), and confidence metrics.
+  - Deterministic vicinity coordinate jitter ($\pm 0.008^\circ \approx 800\text{m}$) explicitly tagged as `BRANCH_VICINITY_ESTIMATE`.
+  - Low-confidence dispatch safety guard (`has_low_confidence_stops`): blocks automatic dispatch with HTTP 422 if confidence $< 0.60$ unless an authorized manager provides an override reason ($\ge 10$ chars).
+- [x] **15.9 Constraint-Aware Optimization & Solvers:**
+  - 3-phase validation pipeline (`RouteConstraintValidator`) enforcing vehicle capacity, depot reachability, and pickup-delivery precedence.
+  - Distinct optimization objectives: `FASTEST`, `SHORTEST_DISTANCE`, `BALANCED`, `PRIORITY_FIRST`.
+  - Google OR-Tools VRP integration (`ORToolsRoutingOptimizer`) and hybrid solver decision gate (ADR-014, ADR-015): 2-Opt for $\le 15$ stops unconstrained; OR-Tools for precedence or $> 15$ stops.
+- [x] **15.10 Driver and Vehicle Allocation Recommendations:**
+  - Explainable ranked candidate scoring via `GET /api/v1/routes/{id}/allocation-recommendations`.
+  - Evaluates availability, workload, active shifts, license, maintenance, capacity, and active-tour conflicts.
+- [x] **15.11 Driver GPS Telemetry Ingestion:**
+  - `POST /api/v1/routes/{id}/telemetry` accepts driver GPS streams, validates freshness (15 min window), dynamically recalculates remaining stop ETAs, and broadcasts `ROUTE_DELAYED` events if delay $> 15$ min.
+- [x] **15.14 Route Planner UI Workbench:**
+  - `LeafletMap.tsx`: live driver marker with freshness indicator, honest vicinity styling, and "Estimated (No road geometry)" banner.
+  - `RoutesPage.tsx`: low-confidence override section in dispatch modal, explainable AI allocation drawer, and coordinate quality badges (`Verified GPS`, `Geocoded`, `Vicinity Est.`).
+- [x] **15.15 & 15.16 Platform Integration & Domain Events:**
+  - In-memory `RouteEventBroadcaster` emitting SSE events post-commit: `ROUTE_DISPATCHED`, `DRIVER_ASSIGNED`, `ROUTE_STARTED`, `STOP_COMPLETED`, `DELIVERY_FAILED`, `ETA_CHANGED`, `ROUTE_DELAYED`, `ROUTE_REOPTIMIZED`.
+  - Verified transaction rollback emits zero events.
+  - Strict negative tenant isolation verified (cross-tenant access returns HTTP 404).
+  - Public tracking verified 100% PII-free.
+  - Simultaneous linehaul and last-mile vehicle usage strictly prevented (HTTP 409).
+- [x] **15.17 Full Verification & Guides:**
+  - Comprehensive documentation: `docs/ROUTE_OPTIMIZATION_GUIDE.md` and `docs/audit/PHASE_15_IMPROVEMENT_REPORT.md`.
+
 | **Phase 17** | Real-Time Notifications & n8n Workflows | NOT STARTED | — | — |
 | **Phase 18** | Billing, Invoicing & Financial Audits | NOT STARTED | — | — |
 | **Phase 19** | Business Intelligence, Analytics & Reporting | NOT STARTED | — | — |
