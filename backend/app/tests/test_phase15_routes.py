@@ -266,7 +266,10 @@ def test_stateless_preview_vicinity_capacity_warning_and_fallback(client, db_ses
     assert sources[p1.id] == "PARCEL_STORED"
     assert sources[p2.id] == "BRANCH_VICINITY_ESTIMATE"
     assert sources[None] == "EXPLICIT"
-    assert len(body["geometry_points"]) >= 4
+    # Integrity Rule (Subphase 15.7 & FIND-15-02):
+    # Geometry is strictly null / empty for local fallback; it is never synthesized
+    # from straight lines presented as road geometry.
+    assert len(body["geometry_points"]) == 0
 
     # Preview is stateless: zero DeliveryRoute rows persisted for p1/p2
     assert db_session.query(RouteStop).filter(RouteStop.parcel_id == p1.id).count() == 0

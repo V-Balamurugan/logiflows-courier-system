@@ -1,10 +1,20 @@
-"""Unit tests for Module 15.1 routing provider adapters, 2-opt TSP solver, and graceful fallback."""
+"""Unit tests for Phase 15 routing provider architecture, pluggable registry, 2-opt TSP, circuit breaker, and normalized contract."""
 import json
 import httpx
 import pytest
 
 from app.models.enums import VehicleType
-from app.services.routing_providers import (
+from app.schemas.route_plan import (
+    DistanceBasis,
+    OptimizationStatus,
+    RouteLegResult,
+    RoutePlanResult,
+    RouteProvenance,
+)
+from app.services.routing import (
+    BaseRoutingProvider,
+    CircuitBreaker,
+    CircuitState,
     LocalHaversineOptimizer,
     OpenRouteServiceAdapter,
     OSRMAdapter,
@@ -50,8 +60,15 @@ def test_local_two_opt_improves_criss_cross_route():
     assert optimized.distance_saved_km > 0
     assert optimized.distance_saved_pct > 0
     assert len(optimized.leg_distances_km) == 5  # 4 stops + return to hub
-    assert len(optimized.geometry_points) == 6
+
+    # Evidence & Integrity requirement (Subphase 15.7 & FIND-15-02):
+    # Geometry MUST be None for local fallback; it is NEVER synthesized from straight lines.
+    assert optimized.geometry is None
+    assert optimized.geometry_points == []
     assert optimized.provider_used == "local_fallback"
+    assert optimized.optimization_status in {OptimizationStatus.HEURISTIC, OptimizationStatus.OPTIMAL}
+    assert optimized.provenance.data_source == "LOCAL_CALIBRATED_HAVERSINE"
+    assert all(leg.distance_basis == DistanceBasis.ROAD_ESTIMATE for leg in optimized.legs)
 
 
 def test_ors_adapter_with_mock_transport_and_retry():
@@ -60,7 +77,7 @@ def test_ors_adapter_with_mock_transport_and_retry():
     def handler(request: httpx.Request) -> httpx.Response:
         calls["count"] += 1
         assert request.headers["Authorization"] == "fake-ors-key"
-        # Simulate transient 503 on first call, then HTTP 200
+        # Simulate transient 503 on first call, then HTTP 200 with rate-limit headers
         if calls["count"] == 1:
             return httpx.Response(503, json={"error": "rate/upstream busy"})
         body = {
@@ -84,7 +101,11 @@ def test_ors_adapter_with_mock_transport_and_retry():
                 }
             ]
         }
-        return httpx.Response(200, json=body)
+        return httpx.Response(
+            200,
+            json=body,
+            headers={"x-ratelimit-remaining": "142", "Retry-After": "1"},
+        )
 
     adapter = OpenRouteServiceAdapter(
         api_key="fake-ors-key",
@@ -109,7 +130,11 @@ def test_ors_adapter_with_mock_transport_and_retry():
     assert res.provider_used == "openrouteservice"
     assert res.is_fallback is False
     assert res.total_distance_km == 15.1
+    # Real road geometry points from provider
     assert len(res.geometry_points) == 4
+    assert res.geometry is not None
+    assert all(leg.distance_basis == DistanceBasis.PROVIDER_ROAD for leg in res.legs)
+    assert adapter.rate_limit_remaining == 142
 
 
 def test_osrm_adapter_mock_and_graceful_fallback():
@@ -159,6 +184,7 @@ def test_osrm_adapter_mock_and_graceful_fallback():
     assert res.provider_used == "osrm"
     assert res.ordered_indices == [1, 0]
     assert res.total_distance_km == 10.5
+    assert res.geometry is not None
 
     # Now test timeout -> graceful degradation to local_fallback
     def fail_handler(request: httpx.Request) -> httpx.Response:
@@ -180,6 +206,7 @@ def test_osrm_adapter_mock_and_graceful_fallback():
     assert degraded.is_fallback is True
     assert degraded.fallback_reason is not None
     assert "ReadTimeout" in degraded.fallback_reason
+    assert degraded.geometry is None  # Local fallback geometry is None
 
     # Missing ORS_API_KEY also degrades cleanly without failing
     no_key_ors = OpenRouteServiceAdapter(api_key="")
@@ -201,3 +228,103 @@ def test_deterministic_branch_vicinity_coords():
     assert c1 == c2
     assert c1 != c3
     assert -90 <= c1[0] <= 90 and -180 <= c1[1] <= 180
+
+
+def test_pluggable_custom_routing_provider_registration():
+    """Prove Subphase 15.7 requirement: register a stub provider without touching core logic."""
+    class CustomStubProvider(BaseRoutingProvider):
+        name = "stub_experimental"
+
+        def compute_route(
+            self,
+            start,
+            waypoints,
+            vehicle_type=VehicleType.VAN,
+            objective="FASTEST",
+            return_to_hub=True,
+        ) -> RoutePlanResult:
+            # Reverses waypoints sequence as a mock experiment
+            order = list(reversed(range(len(waypoints))))
+            return RoutePlanResult(
+                provider_used=self.name,
+                fallback_used=False,
+                ordered_stops=order,
+                legs=[
+                    RouteLegResult(
+                        from_index=-1,
+                        to_index=idx,
+                        distance_m=1000.0,
+                        duration_s=120.0,
+                        distance_basis=DistanceBasis.ROAD_ESTIMATE,
+                    )
+                    for idx in order
+                ],
+                total_distance_m=1000.0 * len(waypoints),
+                total_duration_s=120.0 * len(waypoints),
+                geometry=None,
+                per_stop_eta=[],
+                objective=objective,
+                optimization_status=OptimizationStatus.OPTIMAL,
+                provenance=RouteProvenance(
+                    data_source="STUB_CUSTOM",
+                    algorithm="ReverseOrderStub",
+                    version="1.0.0",
+                ),
+            )
+
+    stub = CustomStubProvider()
+    RoutingEngine.register_provider("stub_experimental", stub)
+
+    waypoints = [
+        Waypoint(index=0, latitude=19.0900, longitude=72.8900, label="A"),
+        Waypoint(index=1, latitude=19.1200, longitude=72.9100, label="B"),
+        Waypoint(index=2, latitude=19.1500, longitude=72.9300, label="C"),
+    ]
+
+    res = RoutingEngine.compute_route(
+        start=(19.0760, 72.8777),
+        waypoints=waypoints,
+        provider="stub_experimental",
+    )
+
+    assert res.provider_used == "stub_experimental"
+    assert res.ordered_stops == [2, 1, 0]
+    assert res.total_distance_m == 3000.0
+    assert res.provenance.algorithm == "ReverseOrderStub"
+
+    # Clean up registry
+    RoutingEngine.unregister_provider("stub_experimental")
+    assert RoutingEngine.get_provider("stub_experimental") is None
+
+
+def test_circuit_breaker_transitions_and_recovery():
+    """Verify CircuitBreaker transitions: CLOSED -> OPEN on threshold -> HALF_OPEN on timeout -> CLOSED on success."""
+    cb = CircuitBreaker("test_cb", failure_threshold=2, recovery_timeout_seconds=5.0)
+    assert cb.state == CircuitState.CLOSED
+    assert cb.can_execute() is True
+
+    # 1st failure: remains CLOSED
+    cb.record_failure(RuntimeError("Transient error 1"))
+    assert cb.state == CircuitState.CLOSED
+    assert cb.failure_count == 1
+    assert cb.can_execute() is True
+
+    # 2nd failure: trips to OPEN
+    cb.record_failure(RuntimeError("Transient error 2"))
+    assert cb.state == CircuitState.OPEN
+    assert cb.failure_count == 2
+    assert cb.can_execute() is False
+
+    # Mock time advancement beyond recovery timeout (5.1s)
+    simulated_now = cb.time_fn() + 5.1
+    cb.time_fn = lambda: simulated_now
+
+    # Should transition to HALF_OPEN probe state
+    assert cb.can_execute() is True
+    assert cb.state == CircuitState.HALF_OPEN
+
+    # Probe call succeeds -> resets to CLOSED
+    cb.record_success()
+    assert cb.state == CircuitState.CLOSED
+    assert cb.failure_count == 0
+    assert cb.can_execute() is True
