@@ -13,6 +13,7 @@ import { BookParcelPage } from '../pages/BookParcelPage';
 import { ParcelsPage } from '../pages/ParcelsPage';
 import { ParcelDetailPage } from '../pages/ParcelDetailPage';
 import { AssignmentsPage } from '../pages/AssignmentsPage';
+import { RoutesPage } from '../pages/RoutesPage';
 import { LinehaulPage } from '../pages/LinehaulPage';
 import { QRScannerPage } from '../pages/QRScannerPage';
 import { BranchesPage } from '../pages/BranchesPage';
@@ -58,6 +59,7 @@ export const AppRoutes: React.FC = () => {
             }
           >
             <Route path="/assignments" element={<AssignmentsPage />} />
+            <Route path="/routes" element={<RoutesPage />} />
             <Route path="/linehaul" element={<LinehaulPage />} />
             <Route path="/qr-scanner" element={<QRScannerPage />} />
           </Route>

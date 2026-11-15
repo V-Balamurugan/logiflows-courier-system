@@ -1,15 +1,29 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Bell, User as UserIcon } from 'lucide-react';
+import { Search, Menu, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
-export const Navbar: React.FC = () => {
+interface NavbarProps {
+  onMenuClick?: () => void;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
   const { user } = useAuth();
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200/80 px-8 flex items-center justify-between sticky top-0 z-30 shadow-2xs">
-      <div className="flex items-center gap-4 w-96">
-        <div className="relative w-full">
+    <header className="h-16 bg-white border-b border-slate-200/80 px-4 sm:px-8 flex items-center justify-between gap-3 sticky top-0 z-30 shadow-2xs">
+      <div className="flex items-center gap-3 flex-1 max-w-sm">
+        {onMenuClick && (
+          <button
+            type="button"
+            aria-label="Open navigation menu"
+            onClick={onMenuClick}
+            className="md:hidden p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 shrink-0"
+          >
+            <Menu className="w-4 h-4" />
+          </button>
+        )}
+        <div className="relative w-full min-w-0">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
@@ -19,10 +33,10 @@ export const Navbar: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4 shrink-0">
         <Link
           to="/tracking"
-          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors"
+          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors whitespace-nowrap"
         >
           Public Tracker
         </Link>

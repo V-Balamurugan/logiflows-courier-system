@@ -93,3 +93,12 @@ This document defines the Role-Based Access Control (RBAC) and Multi-Tenant Isol
 | **GET** | `/api/v1/linehaul/discrepancies` | Branch Manager, Org Admin, Super Admin | Scoped to org (and origin/dest branch for BM) | Filtered list |
 | **POST** | `/api/v1/linehaul/discrepancies` | Branch Manager, Org Admin, Super Admin | Manifest within org/branch after dispatch | `404 Not Found` / `409` |
 | **PATCH** | `/api/v1/linehaul/discrepancies/{id}` | Branch Manager, Org Admin, Super Admin | Scoped to org/branch; optional hold release to dest | `404 Not Found` |
+| **POST** | `/api/v1/routes/preview` | Branch Manager, Org Admin, Super Admin | Branch within org/branch; stateless preview | `403` / `404` / `422` |
+| **POST** | `/api/v1/routes` | Branch Manager, Org Admin, Super Admin | Branch, parcels, vehicle, driver within org/branch | `404` / `409` / `422` |
+| **GET** | `/api/v1/routes` | Staff (`DELIVERY_AGENT`, `BRANCH_MANAGER`, `ORG_ADMIN`, `SUPER_ADMIN`) | Agent sees own `driver_id`; BM sees branch; OA sees org | Filtered list |
+| **GET** | `/api/v1/routes/{id}` | Staff (scoped) | Org/branch match; Agent only if `driver_id == user.id` | `404 Not Found` |
+| **POST** | `/api/v1/routes/{id}/reoptimize` | Branch Manager, Org Admin, Super Admin | Org/branch match + optimistic `version_id` check | `404` / `409` / `422` |
+| **POST** | `/api/v1/routes/{id}/dispatch` | Branch Manager, Org Admin, Super Admin | Atomic CAS vehicle lock + assignments + transitions | `404` / `409` / `422` |
+| **POST** | `/api/v1/routes/{id}/start` | Staff (scoped) | Assigned driver or branch manager+ on DISPATCHED route | `404 Not Found` / `409` |
+| **POST** | `/api/v1/routes/{id}/stops/{stop_id}/update` | Staff (scoped) | Assigned driver or BM+; GPS bounds & state machine sync | `404` / `409` / `422` |
+| **POST** | `/api/v1/routes/{id}/cancel` | Branch Manager, Org Admin, Super Admin | Org/branch match; reverts vehicle, stops, assignments | `404 Not Found` / `409` |

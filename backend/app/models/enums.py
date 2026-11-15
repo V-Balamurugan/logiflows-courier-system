@@ -126,3 +126,53 @@ class DiscrepancyStatus(str, Enum):
     RESOLVED = "RESOLVED"
 
 
+class RouteStatus(str, Enum):
+    DRAFT = "DRAFT"
+    PLANNED = "PLANNED"
+    DISPATCHED = "DISPATCHED"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+
+
+class RouteStopType(str, Enum):
+    PICKUP = "PICKUP"
+    DELIVERY = "DELIVERY"
+
+
+class RouteStopStatus(str, Enum):
+    PENDING = "PENDING"
+    EN_ROUTE = "EN_ROUTE"
+    ARRIVED = "ARRIVED"
+    COMPLETED = "COMPLETED"
+    SKIPPED = "SKIPPED"
+    FAILED = "FAILED"
+
+
+class RouteObjective(str, Enum):
+    FASTEST = "FASTEST"
+    SHORTEST = "SHORTEST"
+    SHORTEST_DISTANCE = "SHORTEST_DISTANCE"
+    BALANCED = "BALANCED"
+    PRIORITY_FIRST = "PRIORITY_FIRST"
+    MANUAL = "MANUAL"
+
+
+class CoordinateSource(str, Enum):
+    """Auditable provenance source of geographic latitude and longitude coordinates."""
+
+    VERIFIED_GPS = "VERIFIED_GPS"
+    VERIFIED_GEOCODING = "VERIFIED_GEOCODING"
+    MANUAL = "MANUAL"
+    BRANCH_VICINITY_ESTIMATE = "BRANCH_VICINITY_ESTIMATE"
+
+
+class CoordinateVerificationStatus(str, Enum):
+    """Quality and verification state of geographic coordinates."""
+
+    VERIFIED = "VERIFIED"
+    UNVERIFIED = "UNVERIFIED"
+    FAILED = "FAILED"
+
+
+

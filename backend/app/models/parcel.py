@@ -2,7 +2,13 @@ from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum as SQLEnum, Text
 from sqlalchemy.orm import relationship
 from app.database.session import Base
-from app.models.enums import ServiceType, PaymentStatus, ParcelStatus
+from app.models.enums import (
+    CoordinateSource,
+    CoordinateVerificationStatus,
+    ParcelStatus,
+    PaymentStatus,
+    ServiceType,
+)
 
 
 class Parcel(Base):
@@ -31,6 +37,32 @@ class Parcel(Base):
     receiver_city = Column(String(100), nullable=False)
     receiver_state = Column(String(100), nullable=False)
     receiver_pincode = Column(String(20), nullable=False)
+    origin_latitude = Column(Float, nullable=True)
+    origin_longitude = Column(Float, nullable=True)
+    dest_latitude = Column(Float, nullable=True)
+    dest_longitude = Column(Float, nullable=True)
+    sender_normalized_address = Column(Text, nullable=True)
+    receiver_normalized_address = Column(Text, nullable=True)
+    origin_coordinate_source = Column(
+        SQLEnum(CoordinateSource), default=CoordinateSource.BRANCH_VICINITY_ESTIMATE, nullable=False
+    )
+    origin_confidence = Column(Float, nullable=True)
+    origin_verification_status = Column(
+        SQLEnum(CoordinateVerificationStatus),
+        default=CoordinateVerificationStatus.UNVERIFIED,
+        nullable=False,
+    )
+    origin_last_verified_at = Column(DateTime, nullable=True)
+    dest_coordinate_source = Column(
+        SQLEnum(CoordinateSource), default=CoordinateSource.BRANCH_VICINITY_ESTIMATE, nullable=False
+    )
+    dest_confidence = Column(Float, nullable=True)
+    dest_verification_status = Column(
+        SQLEnum(CoordinateVerificationStatus),
+        default=CoordinateVerificationStatus.UNVERIFIED,
+        nullable=False,
+    )
+    dest_last_verified_at = Column(DateTime, nullable=True)
 
     # Physical Attributes
     weight_kg = Column(Float, nullable=False)
@@ -72,4 +104,5 @@ class Parcel(Base):
     tracking_history = relationship("TrackingHistory", back_populates="parcel", cascade="all, delete-orphan", order_by="TrackingHistory.created_at.asc()")
     custody_scans = relationship("CustodyScan", back_populates="parcel", cascade="all, delete-orphan", order_by="CustodyScan.created_at.desc()")
     assignments = relationship("DeliveryAssignment", back_populates="parcel", cascade="all, delete-orphan")
+    route_stops = relationship("RouteStop", back_populates="parcel")
 

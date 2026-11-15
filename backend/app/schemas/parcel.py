@@ -69,6 +69,10 @@ class ParcelCreate(BaseModel):
     receiver_city: str = Field(..., min_length=2)
     receiver_state: str = Field(..., min_length=2)
     receiver_pincode: str = Field(..., min_length=3)
+    origin_latitude: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    origin_longitude: Optional[float] = Field(None, ge=-180.0, le=180.0)
+    dest_latitude: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    dest_longitude: Optional[float] = Field(None, ge=-180.0, le=180.0)
 
     weight_kg: float = Field(..., ge=0.01, le=500.0, description="Weight in kg (0.01 - 500.0)")
     length_cm: float = Field(..., ge=1.0, le=300.0, description="Length in cm (1.0 - 300.0)")
@@ -79,10 +83,10 @@ class ParcelCreate(BaseModel):
     idempotency_key: Optional[str] = Field(None, description="Optional client idempotency key to prevent double-booking")
     notes: Optional[str] = None
 
-    @field_validator("weight_kg", "length_cm", "width_cm", "height_cm")
+    @field_validator("weight_kg", "length_cm", "width_cm", "height_cm", "origin_latitude", "origin_longitude", "dest_latitude", "dest_longitude")
     @classmethod
-    def validate_finite(cls, v: float, info) -> float:
-        if math.isnan(v) or math.isinf(v):
+    def validate_finite(cls, v: Optional[float], info) -> Optional[float]:
+        if v is not None and (math.isnan(v) or math.isinf(v)):
             raise ValueError(f"{info.field_name} must be a valid finite number")
         return v
 
@@ -161,6 +165,10 @@ class ParcelResponse(BaseModel):
     receiver_city: str
     receiver_state: str
     receiver_pincode: str
+    origin_latitude: Optional[float] = None
+    origin_longitude: Optional[float] = None
+    dest_latitude: Optional[float] = None
+    dest_longitude: Optional[float] = None
 
     weight_kg: float
     length_cm: float

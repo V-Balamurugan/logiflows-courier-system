@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     
     RATE_LIMIT_MAX_REQUESTS: int = 100
     RATE_LIMIT_WINDOW_SECONDS: int = 60
+
+    # Routing & Map Integration (Phase 15)
+    ROUTING_PROVIDER: str = "local"  # "local" | "openrouteservice" | "osrm"
+    ORS_API_KEY: str = ""
+    ORS_BASE_URL: str = "https://api.openrouteservice.org"
+    OSRM_BASE_URL: str = "https://router.project-osrm.org"
+    ROUTING_TIMEOUT_SECONDS: float = 8.0
+    ROUTING_MAX_RETRIES: int = 2
     
     model_config = SettingsConfigDict(
         env_file=".env",

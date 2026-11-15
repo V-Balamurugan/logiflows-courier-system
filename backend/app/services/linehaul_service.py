@@ -28,6 +28,7 @@ from app.models.linehaul import (
     LinehaulManifestItem,
     TransferDiscrepancy,
 )
+from app.models.route import DeliveryRoute, RouteStop
 from app.models.parcel import Parcel
 from app.models.user import User
 from app.models.vehicle import Vehicle
@@ -248,6 +249,16 @@ class LinehaulService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Parcel {parcel.tracking_number} holds active DeliveryAssignment #{active_assign.id}",
             )
+        active_route_stop = (
+            db.query(RouteStop)
+            .filter(RouteStop.parcel_id == parcel.id, RouteStop.is_active == True)
+            .first()
+        )
+        if active_route_stop:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Parcel {parcel.tracking_number} is actively scheduled on Route #{active_route_stop.route_id}",
+            )
         active_bag_item = (
             db.query(BagItem)
             .filter(BagItem.parcel_id == parcel.id, BagItem.is_active == True)
@@ -325,6 +336,16 @@ class LinehaulService:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Vehicle {vehicle.vehicle_number} is actively assigned on Assignment #{active_assign.id}",
+            )
+        active_route = (
+            db.query(DeliveryRoute)
+            .filter(DeliveryRoute.vehicle_id == vehicle.id, DeliveryRoute.is_active_dispatch == True)
+            .first()
+        )
+        if active_route:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Vehicle {vehicle.vehicle_number} is actively dispatched on Route {active_route.route_code}",
             )
 
         conflict_query = db.query(LinehaulManifest).filter(

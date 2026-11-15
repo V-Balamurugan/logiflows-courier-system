@@ -16,6 +16,10 @@ from app.models.enums import (
     DiscrepancyType,
     DiscrepancySeverity,
     DiscrepancyStatus,
+    RouteStatus,
+    RouteStopType,
+    RouteStopStatus,
+    RouteObjective,
 )
 from app.models.organization import Organization
 from app.models.branch import Branch
@@ -33,6 +37,7 @@ from app.models.linehaul import (
     LinehaulManifestItem,
     TransferDiscrepancy,
 )
+from app.models.route import DeliveryRoute, RouteStop
 
 __all__ = [
     "Base",
@@ -52,6 +57,10 @@ __all__ = [
     "DiscrepancyType",
     "DiscrepancySeverity",
     "DiscrepancyStatus",
+    "RouteStatus",
+    "RouteStopType",
+    "RouteStopStatus",
+    "RouteObjective",
     "Organization",
     "Branch",
     "User",
@@ -67,5 +76,7 @@ __all__ = [
     "BagItem",
     "LinehaulManifestItem",
     "TransferDiscrepancy",
+    "DeliveryRoute",
+    "RouteStop",
 ]
 

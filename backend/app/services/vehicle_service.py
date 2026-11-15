@@ -7,7 +7,8 @@ from app.models.vehicle import Vehicle
 from app.models.user import User
 from app.models.assignment import DeliveryAssignment
 from app.models.linehaul import LinehaulManifest
-from app.models.enums import UserRole, VehicleStatus, AssignmentStatus, ManifestStatus
+from app.models.route import DeliveryRoute
+from app.models.enums import UserRole, VehicleStatus, AssignmentStatus, ManifestStatus, RouteStatus
 from app.schemas.vehicle import VehicleCreate, VehicleUpdate, normalize_reg_number
 
 
@@ -119,6 +120,19 @@ class VehicleService:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail=f"Cannot place vehicle into maintenance: actively assigned to Linehaul Manifest {active_manifest.manifest_number}"
+                )
+
+            active_route = db.query(DeliveryRoute).filter(
+                DeliveryRoute.vehicle_id == vehicle.id,
+                DeliveryRoute.status.in_([
+                    RouteStatus.DISPATCHED,
+                    RouteStatus.IN_PROGRESS,
+                ])
+            ).first()
+            if active_route:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Cannot place vehicle into maintenance: actively dispatched on Route {active_route.route_code}"
                 )
 
             vehicle.status = VehicleStatus.MAINTENANCE

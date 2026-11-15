@@ -247,4 +247,45 @@ test.describe('LogiFlows Courier System E2E Suite', () => {
     await expect(page.locator('button:has-text("Log Transfer Discrepancy")')).toBeVisible();
   });
 
+  test('Journey 17: Branch Manager Dynamic Route Optimization & Interactive Map Portal', async ({ page }) => {
+    await page.goto('/login');
+    await page.locator('input[type="email"]').fill('manager.mumbai@logiflows.com');
+    await page.locator('input[type="password"]').fill('Manager@123');
+    await page.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(/.*dashboard/);
+
+    await page.goto('/routes');
+    await expect(page.locator('text=Dynamic Route Optimization & Map')).toBeVisible();
+
+    // Open Route Planner workbench and add 2 custom GPS waypoints
+    await page.locator('button:has-text("Plan New Route")').click();
+    await page.locator('input[placeholder="Stop location name"]').fill('Andheri Hub Stop');
+    await page.locator('input[placeholder*="Latitude"]').fill('19.1136');
+    await page.locator('input[placeholder*="Longitude"]').fill('72.8697');
+    await page.locator('button:has-text("+ Add Stop")').click();
+
+    await page.locator('input[placeholder="Stop location name"]').fill('Bandra Delivery Point');
+    await page.locator('input[placeholder*="Latitude"]').fill('19.0596');
+    await page.locator('input[placeholder*="Longitude"]').fill('72.8295');
+    await page.locator('button:has-text("+ Add Stop")').click();
+
+    // Preview optimized route and verify interactive Leaflet map renders
+    await page.locator('button:has-text("Preview Optimized Route")').click();
+    await expect(page.locator('text=Optimized Dist')).toBeVisible();
+    await expect(page.locator('text=Savings vs Baseline')).toBeVisible();
+    await expect(page.locator('.leaflet-container').first()).toBeVisible();
+
+    // Persist the route plan and verify active itinerary & dispatch actions
+    await page.locator('button:has-text("Save Route Plan")').click();
+    await expect(page.locator('text=Ordered Stop Itinerary')).toBeVisible();
+    await expect(page.locator('button:has-text("Dispatch Route")')).toBeVisible();
+
+    // Cancel the E2E-created route to preserve clean state across browser projects
+    await page.locator('button:has-text("Cancel Route")').click();
+    await page.locator('#cancel-route-reason').fill('E2E cleanup cancellation');
+    await page.locator('button:has-text("Confirm Cancel")').click();
+    await expect(page.locator('#cancel-route-reason')).toBeHidden();
+    await expect(page.locator('button:has-text("Cancel Route")')).toBeHidden();
+  });
+
 });

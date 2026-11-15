@@ -20,8 +20,14 @@ def test_calculate_quote(client):
 def test_book_parcel_and_verify_tracking(client, customer_headers):
     # Fetch branches
     branches = client.get(f"{settings.API_V1_STR}/branches", headers=customer_headers).json()
-    b_origin = branches[0]["id"]
-    b_dest = branches[1]["id"]
+    by_org = {}
+    for b in branches:
+        by_org.setdefault(b["organization_id"], []).append(b["id"])
+    same_org_branch_ids = next((ids for ids in by_org.values() if len(ids) >= 2), None)
+    if same_org_branch_ids:
+        b_origin, b_dest = same_org_branch_ids[0], same_org_branch_ids[1]
+    else:
+        b_origin, b_dest = branches[0]["id"], branches[0]["id"]
 
     payload = {
         "origin_branch_id": b_origin,
@@ -72,9 +78,18 @@ def test_book_parcel_and_verify_tracking(client, customer_headers):
 
 def test_cancel_booked_parcel(client, customer_headers):
     branches = client.get(f"{settings.API_V1_STR}/branches", headers=customer_headers).json()
+    by_org = {}
+    for b in branches:
+        by_org.setdefault(b["organization_id"], []).append(b["id"])
+    same_org_branch_ids = next((ids for ids in by_org.values() if len(ids) >= 2), None)
+    if same_org_branch_ids:
+        b_origin, b_dest = same_org_branch_ids[0], same_org_branch_ids[1]
+    else:
+        b_origin, b_dest = branches[0]["id"], branches[0]["id"]
+
     payload = {
-        "origin_branch_id": branches[0]["id"],
-        "dest_branch_id": branches[1]["id"],
+        "origin_branch_id": b_origin,
+        "dest_branch_id": b_dest,
         "sender_name": "Cancel Sender",
         "sender_phone": "+91 99999 11111",
         "sender_address": "Test address",
