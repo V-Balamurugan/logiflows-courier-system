@@ -61,7 +61,7 @@ class RoutePreviewRequest(BaseModel):
     vehicle_id: Optional[int] = None
     objective: RouteObjective = RouteObjective.FASTEST
     provider: str = Field(
-        "auto", pattern="^(auto|local|local_fallback|openrouteservice|osrm)$"
+        "auto", pattern="^(auto|local|local_fallback|openrouteservice|osrm|ortools)$"
     )
     return_to_hub: bool = True
     parcel_ids: Optional[List[int]] = Field(None, min_length=1, max_length=100)
@@ -94,7 +94,7 @@ class RouteReoptimizeRequest(BaseModel):
 
     objective: RouteObjective = RouteObjective.FASTEST
     provider: str = Field(
-        "auto", pattern="^(auto|local|local_fallback|openrouteservice|osrm)$"
+        "auto", pattern="^(auto|local|local_fallback|openrouteservice|osrm|ortools)$"
     )
     return_to_hub: Optional[bool] = None
     manual_stop_ids: Optional[List[int]] = None

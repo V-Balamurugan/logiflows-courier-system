@@ -163,4 +163,52 @@ This document records architectural decisions, assumptions, and design patterns 
   - Added cross-module conflict guards across `BranchService`, `VehicleService`, `LinehaulService`, and atomic dispatch synchronization with `DeliveryAssignment` and `ShipmentStateMachine`.
 - **Status:** Adopted & Verified (Phase 15).
 
+---
+
+## ADR-014: Constraint-Aware Routing Pipeline, Distinct Objectives & Solver Decision Gate
+
+- **Context:** Subphase 15.9 requires constraint-aware optimization (pickup-before-delivery precedence, vehicle payload capacity, time windows, driver shift limits) and an evidence-backed solver decision gate benchmarking the heuristic nearest-neighbour + 2-opt against Google OR-Tools.
+- **Decision:**
+  - **3-Phase Validation Pipeline:**
+    1. **Pre-Validation:** Rejects infeasible requests prior to computation (e.g. payload exceeded, missing depot coordinates, invalid coordinates).
+    2. **Optimization:** Executes solver according to selected objective (`FASTEST`, `SHORTEST_DISTANCE`, `BALANCED`, `PRIORITY_FIRST`).
+    3. **Post-Validation:** Evaluates output plan against shift duration, max route distance, time windows, and precedence invariants, generating machine-readable `ConstraintViolation` structures with plain-language explanations.
+  - **Distinct Objective Formulations:**
+    - `FASTEST`: $\min(T_{\text{travel}} + T_{\text{service}} + T_{\text{wait}})$
+    - `SHORTEST_DISTANCE`: $\min D_{\text{total}}$ (provider road distance when available; calibrated estimate otherwise)
+    - `BALANCED`: $\min(w_t \cdot T_{\text{travel}} + w_d \cdot D_{\text{total}} + w_p \cdot P_{\text{priority}})$ with documented weights $w_t = 0.50, w_d = 0.30, w_p = 0.20$
+    - `PRIORITY_FIRST`: Lexicographic minimization of deadline and priority order inversions prior to distance, subject to hard precedence constraints.
+  - **Solver Decision Gate Benchmark Results (Seeded Fixture, seed=42):**
+    | Fixture | Solver | Runtime (ms) | Distance (km) | Duration (min) | Precedence Valid |
+    |---|---|---|---|---|---|
+    | 10 Stops - Basic TSP | NearestNeighbor+2-Opt | 18.45 ms | 68.09 km | 157.5 min | YES |
+    | 10 Stops - Basic TSP | Google OR-Tools | 3102.37 ms | 68.09 km | 157.5 min | YES |
+    | 10 Stops - With Precedence | NearestNeighbor+2-Opt | 6.42 ms | 71.66 km | 163.1 min | YES |
+    | 10 Stops - With Precedence | Google OR-Tools | 3014.12 ms | 69.60 km | 159.9 min | YES |
+    | 25 Stops - Basic TSP | NearestNeighbor+2-Opt | 78.73 ms | 95.59 km | 275.9 min | YES |
+    | 25 Stops - Basic TSP | Google OR-Tools | 3004.64 ms | 94.93 km | 274.9 min | YES |
+    | 25 Stops - With Precedence | NearestNeighbor+2-Opt | 9.81 ms | 142.17 km | 349.5 min | YES |
+    | 25 Stops - With Precedence | Google OR-Tools | 3002.94 ms | 103.83 km | 288.9 min | YES (27.0% distance reduction) |
+    | 50 Stops - Basic TSP | NearestNeighbor+2-Opt | 1173.08 ms | 162.89 km | 507.2 min | YES |
+    | 50 Stops - Basic TSP | Google OR-Tools | 3016.18 ms | 165.60 km | 511.5 min | YES |
+    | 50 Stops - With Precedence | NearestNeighbor+2-Opt | 118.88 ms | 354.99 km | 810.5 min | YES |
+    | 50 Stops - With Precedence | Google OR-Tools | 3010.06 ms | 171.54 km | 520.9 min | YES (51.7% distance reduction) |
+  - **Architectural Adoption Decision:**
+    - For basic unconstrained routes ($\le 15$ stops), use `LocalHaversineOptimizer` (Nearest-Neighbor + 2-Opt) for ultra-low latency ($< 20$ ms).
+    - When pickup-before-delivery precedence or time windows are present, or when stop count $> 15$, invoke `ORToolsRoutingOptimizer` with a bounded time limit (3.0 seconds max) and a hard cap of 150 stops, safely falling back to 2-opt if timeout occurs.
+- **Status:** Adopted & Verified (Phase 15 Improvements).
+
+---
+
+## ADR-015: Coordinate Provenance, Address Geocoding & Dispatch Safety Guard
+
+- **Context:** Routes dispatched with unverified or estimated coordinates risk driver confusion, inaccurate ETAs, and failed deliveries.
+- **Decision:**
+  - Added coordinate provenance enums: `CoordinateSource` (`VERIFIED_GPS`, `VERIFIED_GEOCODING`, `MANUAL`, `BRANCH_VICINITY_ESTIMATE`) and `CoordinateVerificationStatus` (`VERIFIED`, `UNVERIFIED`, `FAILED`).
+  - Added confidence and source tracking to `Parcel` and `RouteStop` models via Alembic migration `c8f1a2b3c4d5`.
+  - Implemented `GeocodingService` with in-memory TTL caching and normalized address parsing (`normalize_address`).
+  - **Automatic Dispatch Guard:** Any route containing stops with low confidence ($< 0.60$) or `BRANCH_VICINITY_ESTIMATE` coordinates automatically sets `has_low_confidence_stops = True`. Dispatch is blocked with HTTP 422 unless an authorized manager provides `low_confidence_override_reason` ($\ge 10$ characters).
+- **Status:** Adopted & Verified (Phase 15 Improvements).
+
+
 

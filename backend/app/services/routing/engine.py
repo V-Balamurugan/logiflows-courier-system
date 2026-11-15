@@ -16,6 +16,7 @@ from app.services.routing.base import (
 from app.services.routing.local import LocalHaversineOptimizer
 from app.services.routing.ors import OpenRouteServiceAdapter
 from app.services.routing.osrm import OSRMAdapter
+from app.services.routing.ortools_optimizer import ORToolsRoutingOptimizer
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ class RoutingEngine:
 
         return {
             "configured_default_provider": settings.ROUTING_PROVIDER or "local",
-            "registered_providers": list(cls._registry.keys()) + ["local", "openrouteservice", "osrm"],
+            "registered_providers": list(cls._registry.keys()) + ["local", "openrouteservice", "osrm", "ortools"],
             "circuit_breakers": {
                 "openrouteservice": ors.circuit_breaker.get_health(),
                 "osrm": osrm.circuit_breaker.get_health(),
@@ -132,6 +133,28 @@ class RoutingEngine:
                 is_fallback=False,
                 fallback_reason=None,
             )
+
+        if requested == "ortools":
+            try:
+                return ORToolsRoutingOptimizer.compute_route(
+                    start=start,
+                    waypoints=waypoints,
+                    vehicle_type=vehicle_type,
+                    objective=objective,
+                    return_to_hub=return_to_hub,
+                )
+            except Exception as exc:
+                reason = f"ORToolsRoutingOptimizer failed ({type(exc).__name__}: {exc}); degraded cleanly to local 2-opt"
+                logger.warning("Routing provider fallback triggered: %s", reason)
+                return LocalHaversineOptimizer.compute_route(
+                    start=start,
+                    waypoints=waypoints,
+                    vehicle_type=vehicle_type,
+                    objective=objective,
+                    return_to_hub=return_to_hub,
+                    is_fallback=True,
+                    fallback_reason=reason,
+                )
 
         if requested == "openrouteservice":
             adapter = ors_adapter or cls._default_ors or OpenRouteServiceAdapter()
