@@ -1,5 +1,5 @@
 """FastAPI endpoints for Phase 15 dynamic route optimization and execution."""
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
@@ -9,6 +9,9 @@ from app.models.enums import RouteStatus
 from app.models.user import User
 from app.schemas.route import (
     DeliveryRouteResponse,
+    DriverTelemetryInput,
+    DriverTelemetryResponse,
+    RouteAllocationRecommendationResponse,
     RouteCancelRequest,
     RouteCreateRequest,
     RouteDispatchRequest,
@@ -18,8 +21,17 @@ from app.schemas.route import (
     RouteStopUpdateRequest,
 )
 from app.services.route_service import RouteService
+from app.services.routing_providers import RoutingEngine
 
 router = APIRouter(prefix="/routes", tags=["Route Optimization"])
+
+
+@router.get("/providers/health", response_model=Dict[str, Any])
+def get_providers_health(
+    current_user: User = Depends(require_staff),
+):
+    """Retrieve operational diagnostics for external routing providers and circuit breakers."""
+    return RoutingEngine.get_providers_health()
 
 
 @router.post("/preview", response_model=RoutePreviewResponse)
@@ -129,3 +141,24 @@ def cancel_route(
 ):
     """Cancel a route plan or active dispatch, restoring vehicle availability and parcel state."""
     return RouteService.cancel_route(db, current_user, route_id, req)
+
+
+@router.get("/{route_id}/allocation-recommendations", response_model=RouteAllocationRecommendationResponse)
+def get_route_allocation_recommendations(
+    route_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_branch_manager_or_higher),
+):
+    """Retrieve explainable ranked driver and vehicle allocation recommendations with blocking reasons."""
+    return RouteService.get_route_allocation_recommendations(db, current_user, route_id)
+
+
+@router.post("/{route_id}/telemetry", response_model=DriverTelemetryResponse)
+def ingest_driver_telemetry(
+    route_id: int,
+    req: DriverTelemetryInput,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_staff),
+):
+    """Ingest driver GPS stream, check freshness, and recalculate dynamic remaining ETAs."""
+    return RouteService.ingest_driver_telemetry(db, current_user, route_id, req)

@@ -21,6 +21,8 @@ from app.models.branch import Branch
 from app.models.enums import (
     AssignmentStatus,
     AssignmentType,
+    CoordinateSource,
+    CoordinateVerificationStatus,
     ManifestStatus,
     ParcelStatus,
     RouteObjective,
@@ -39,6 +41,10 @@ from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.schemas.route import (
     DeliveryRouteResponse,
+    DriverAllocationCandidate,
+    DriverTelemetryInput,
+    DriverTelemetryResponse,
+    RouteAllocationRecommendationResponse,
     RouteCancelRequest,
     RouteCreateRequest,
     RouteDispatchRequest,
@@ -49,7 +55,10 @@ from app.schemas.route import (
     RouteStopInput,
     RouteStopResponse,
     RouteStopUpdateRequest,
+    VehicleAllocationCandidate,
 )
+from app.services.geocoding_service import GeocodingService, normalize_address
+from app.services.routing.base import validate_lat_lng
 from app.services.routing_providers import (
     VEHICLE_SPEED_KMH,
     RouteComputationResult,
@@ -106,6 +115,10 @@ class _ResolvedStopInput:
     parcel_weight_kg: float
     priority: int
     notes: Optional[str]
+    coordinate_source: CoordinateSource = CoordinateSource.BRANCH_VICINITY_ESTIMATE
+    confidence: Optional[float] = None
+    verification_status: CoordinateVerificationStatus = CoordinateVerificationStatus.UNVERIFIED
+    normalized_address: Optional[str] = None
 
 
 class RouteService:
@@ -406,6 +419,10 @@ class RouteService:
                         parcel_weight_kg=0.0,
                         priority=0,
                         notes=item.notes,
+                        coordinate_source=CoordinateSource.MANUAL,
+                        confidence=0.85,
+                        verification_status=CoordinateVerificationStatus.VERIFIED,
+                        normalized_address=normalize_address(item.address or ""),
                     )
                 )
                 continue
@@ -424,15 +441,38 @@ class RouteService:
             )
 
             is_pickup = item.stop_type == RouteStopType.PICKUP
+            norm_addr = normalize_address(
+                (parcel.sender_address if is_pickup else parcel.receiver_address) or "",
+                city=(parcel.sender_city if is_pickup else parcel.receiver_city) or "",
+                state=(parcel.sender_state if is_pickup else parcel.receiver_state) or "",
+                pincode=(parcel.sender_pincode if is_pickup else parcel.receiver_pincode) or "",
+            )
             if item.latitude is not None and item.longitude is not None:
                 lat, lng = float(item.latitude), float(item.longitude)
                 coords_source = "EXPLICIT"
+                coord_src = CoordinateSource.MANUAL
+                conf = 0.85
+                v_stat = CoordinateVerificationStatus.VERIFIED
             elif is_pickup and parcel.origin_latitude is not None and parcel.origin_longitude is not None:
                 lat, lng = float(parcel.origin_latitude), float(parcel.origin_longitude)
                 coords_source = "PARCEL_STORED"
+                coord_src = (
+                    parcel.origin_coordinate_source
+                    if parcel.origin_coordinate_source and parcel.origin_coordinate_source != CoordinateSource.BRANCH_VICINITY_ESTIMATE
+                    else CoordinateSource.VERIFIED_GPS
+                )
+                conf = parcel.origin_confidence if parcel.origin_confidence is not None else 0.95
+                v_stat = parcel.origin_verification_status if parcel.origin_verification_status is not None else CoordinateVerificationStatus.VERIFIED
             elif not is_pickup and parcel.dest_latitude is not None and parcel.dest_longitude is not None:
                 lat, lng = float(parcel.dest_latitude), float(parcel.dest_longitude)
                 coords_source = "PARCEL_STORED"
+                coord_src = (
+                    parcel.dest_coordinate_source
+                    if parcel.dest_coordinate_source and parcel.dest_coordinate_source != CoordinateSource.BRANCH_VICINITY_ESTIMATE
+                    else CoordinateSource.VERIFIED_GPS
+                )
+                conf = parcel.dest_confidence if parcel.dest_confidence is not None else 0.95
+                v_stat = parcel.dest_verification_status if parcel.dest_verification_status is not None else CoordinateVerificationStatus.VERIFIED
             else:
                 pincode = (
                     parcel.sender_pincode if is_pickup else parcel.receiver_pincode
@@ -444,6 +484,9 @@ class RouteService:
                     parcel.tracking_number,
                 )
                 coords_source = "BRANCH_VICINITY_ESTIMATE"
+                coord_src = CoordinateSource.BRANCH_VICINITY_ESTIMATE
+                conf = 0.40
+                v_stat = CoordinateVerificationStatus.UNVERIFIED
 
             default_loc = (
                 f"{parcel.sender_name} ({parcel.sender_city})"
@@ -467,6 +510,10 @@ class RouteService:
                     parcel_weight_kg=float(parcel.weight_kg or 0.0),
                     priority=1 if parcel.service_type in PRIORITY_SERVICES else 0,
                     notes=item.notes,
+                    coordinate_source=coord_src,
+                    confidence=conf,
+                    verification_status=v_stat,
+                    normalized_address=norm_addr,
                 )
             )
         return resolved
@@ -546,6 +593,11 @@ class RouteService:
                 latitude=s.latitude,
                 longitude=s.longitude,
                 coords_source=s.coords_source,
+                coordinate_source=s.coordinate_source or CoordinateSource.BRANCH_VICINITY_ESTIMATE,
+                confidence=s.confidence,
+                verification_status=s.verification_status or CoordinateVerificationStatus.UNVERIFIED,
+                last_verified_at=s.last_verified_at,
+                normalized_address=s.normalized_address,
                 distance_from_prev_km=s.distance_from_prev_km,
                 eta_minutes_from_start=s.eta_minutes_from_start,
                 estimated_arrival_at=s.estimated_arrival_at,
@@ -589,6 +641,11 @@ class RouteService:
             geometry_points=RouteService._parse_geometry(route.route_geometry),
             notes=route.notes,
             version_id=route.version_id,
+            idempotency_key=route.idempotency_key,
+            has_low_confidence_stops=route.has_low_confidence_stops,
+            low_confidence_override_reason=route.low_confidence_override_reason,
+            low_confidence_overridden_by_id=route.low_confidence_overridden_by_id,
+            low_confidence_overridden_at=route.low_confidence_overridden_at,
             dispatched_at=route.dispatched_at,
             started_at=route.started_at,
             completed_at=route.completed_at,
@@ -649,6 +706,14 @@ class RouteService:
             return_to_hub=req.return_to_hub,
         )
 
+        low_conf_count = sum(
+            1
+            for s in resolved_stops
+            if s.coordinate_source == CoordinateSource.BRANCH_VICINITY_ESTIMATE
+            or (s.confidence is not None and s.confidence < 0.60)
+        )
+        has_low_conf = bool(low_conf_count > 0)
+
         preview_stops: List[RoutePreviewStop] = []
         cum_eta = 0.0
         for seq_pos, orig_idx in enumerate(comp.ordered_indices):
@@ -667,6 +732,9 @@ class RouteService:
                     latitude=s.latitude,
                     longitude=s.longitude,
                     coords_source=s.coords_source,
+                    coordinate_source=s.coordinate_source,
+                    confidence=s.confidence,
+                    verification_status=s.verification_status,
                     parcel_weight_kg=s.parcel_weight_kg,
                     distance_from_prev_km=round(leg_dist, 3),
                     eta_minutes_from_start=cum_eta,
@@ -693,6 +761,8 @@ class RouteService:
             provider_used=comp.provider_used,
             is_fallback=comp.is_fallback,
             fallback_reason=comp.fallback_reason,
+            has_low_confidence_stops=has_low_conf,
+            low_confidence_stops_count=low_conf_count,
             baseline_distance_km=comp.baseline_distance_km,
             total_distance_km=comp.total_distance_km,
             distance_saved_km=comp.distance_saved_km,
@@ -747,6 +817,11 @@ class RouteService:
         )
 
         now = datetime.now(timezone.utc)
+        has_low_conf = any(
+            s.coordinate_source == CoordinateSource.BRANCH_VICINITY_ESTIMATE
+            or (s.confidence is not None and s.confidence < 0.60)
+            for s in resolved_stops
+        )
         route = DeliveryRoute(
             route_code=RouteService._generate_route_code(db, branch),
             organization_id=branch.organization_id,
@@ -760,6 +835,7 @@ class RouteService:
             is_fallback=comp.is_fallback,
             fallback_reason=comp.fallback_reason,
             return_to_hub=req.return_to_hub,
+            has_low_confidence_stops=has_low_conf,
             start_latitude=float(branch.latitude),
             start_longitude=float(branch.longitude),
             total_distance_km=comp.total_distance_km,
@@ -797,6 +873,11 @@ class RouteService:
                         latitude=s.latitude,
                         longitude=s.longitude,
                         coords_source=s.coords_source,
+                        coordinate_source=s.coordinate_source,
+                        confidence=s.confidence,
+                        verification_status=s.verification_status,
+                        normalized_address=s.normalized_address,
+                        last_verified_at=now,
                         distance_from_prev_km=round(leg_dist, 3),
                         eta_minutes_from_start=cum_eta,
                         estimated_arrival_at=now + timedelta(minutes=cum_eta),
@@ -869,6 +950,11 @@ class RouteService:
     ) -> DeliveryRouteResponse:
         RouteService._ensure_manager(current_user)
         route = RouteService._get_route_scoped(db, current_user, route_id)
+        if req.idempotency_key:
+            if route.idempotency_key == req.idempotency_key:
+                return RouteService.to_route_response(route)
+            route.idempotency_key = req.idempotency_key
+
         if route.status in (RouteStatus.COMPLETED, RouteStatus.CANCELLED):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -1013,6 +1099,17 @@ class RouteService:
     ) -> DeliveryRouteResponse:
         RouteService._ensure_manager(current_user)
         route = RouteService._get_route_scoped(db, current_user, route_id)
+
+        if req.idempotency_key:
+            existing_dispatch = (
+                db.query(DeliveryRoute)
+                .filter(DeliveryRoute.idempotency_key == req.idempotency_key)
+                .first()
+            )
+            if existing_dispatch:
+                return RouteService.to_route_response(existing_dispatch)
+            route.idempotency_key = req.idempotency_key
+
         if route.status != RouteStatus.PLANNED:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -1023,6 +1120,20 @@ class RouteService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Route version conflict (expected {req.expected_version_id}, current {route.version_id})",
             )
+
+        if route.has_low_confidence_stops:
+            override = (req.low_confidence_override_reason or "").strip()
+            if len(override) < 10:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=(
+                        "Automatic dispatch blocked: route contains low-confidence or estimated coordinates. "
+                        "An authorized manager must provide a low_confidence_override_reason with at least 10 characters."
+                    ),
+                )
+            route.low_confidence_override_reason = override
+            route.low_confidence_overridden_by_id = current_user.id
+            route.low_confidence_overridden_at = datetime.now(timezone.utc)
 
         ordered_stops = sorted(route.stops, key=lambda s: s.sequence_order)
         if not ordered_stops:
@@ -1055,6 +1166,21 @@ class RouteService:
             exclude_route_id=route.id,
         )
         driver = RouteService._validate_driver(db, current_user, branch, driver_id)
+
+        active_driver_route = (
+            db.query(DeliveryRoute)
+            .filter(
+                DeliveryRoute.driver_id == driver.id,
+                DeliveryRoute.is_active_dispatch == True,
+                DeliveryRoute.id != route.id,
+            )
+            .first()
+        )
+        if active_driver_route:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Driver '{driver.full_name}' is already assigned to active dispatch route {active_driver_route.route_code}",
+            )
 
         # Atomic conditional CAS lock on vehicle eliminates double-dispatch races
         veh_lock = db.execute(
@@ -1628,3 +1754,276 @@ class RouteService:
             ShipmentStateMachine.broadcast_milestone(**b)
 
         return RouteService.get_route(db, current_user, route.id)
+
+    @staticmethod
+    def get_route_allocation_recommendations(
+        db: Session, current_user: User, route_id: int
+    ) -> RouteAllocationRecommendationResponse:
+        """
+        Explainable driver and vehicle allocation scoring.
+        Evaluates availability, workload, shift, branch, capacity, and active commitments.
+        """
+        RouteService._ensure_manager(current_user)
+        route = RouteService._get_route_scoped(db, current_user, route_id)
+
+        # 1. Driver candidates in branch
+        drivers = (
+            db.query(User)
+            .filter(
+                User.organization_id == route.organization_id,
+                User.branch_id == route.branch_id,
+                User.role.in_([UserRole.DELIVERY_AGENT, UserRole.BRANCH_MANAGER]),
+                User.is_active == True,
+            )
+            .all()
+        )
+
+        recommended_drivers: List[DriverAllocationCandidate] = []
+        for d in drivers:
+            blocking: List[str] = []
+            suitability: List[str] = []
+
+            # Check if active in other route
+            active_route = (
+                db.query(DeliveryRoute)
+                .filter(
+                    DeliveryRoute.driver_id == d.id,
+                    DeliveryRoute.is_active_dispatch == True,
+                    DeliveryRoute.id != route.id,
+                )
+                .first()
+            )
+            if active_route:
+                blocking.append(f"Currently active on dispatched route {active_route.route_code}")
+
+            # Active parcel assignments
+            active_assigns_count = (
+                db.query(DeliveryAssignment)
+                .filter(
+                    DeliveryAssignment.employee_id == d.id,
+                    DeliveryAssignment.status.in_([AssignmentStatus.ASSIGNED, AssignmentStatus.IN_PROGRESS]),
+                )
+                .count()
+            )
+
+            is_eligible = len(blocking) == 0
+            score = 100.0 if is_eligible else 0.0
+            if is_eligible:
+                suitability.append("Available without active route dispatch")
+                if active_assigns_count == 0:
+                    suitability.append("Zero current active assignments (clean slate)")
+                    score += 20.0
+                else:
+                    suitability.append(f"Manageable existing workload ({active_assigns_count} active assignments)")
+                    score -= min(50.0, active_assigns_count * 5.0)
+
+                if d.id == route.driver_id:
+                    suitability.append("Currently assigned driver on planned route")
+                    score += 15.0
+
+            recommended_drivers.append(
+                DriverAllocationCandidate(
+                    driver_id=d.id,
+                    driver_name=d.full_name or d.email,
+                    employee_code=getattr(d, "employee_code", None),
+                    is_eligible=is_eligible,
+                    current_active_routes=1 if active_route else 0,
+                    current_active_assignments=active_assigns_count,
+                    shift=getattr(d, "shift", "Day"),
+                    score=round(score, 1),
+                    suitability_reasons=suitability,
+                    blocking_reasons=blocking,
+                )
+            )
+
+        recommended_drivers.sort(key=lambda c: (c.is_eligible, c.score), reverse=True)
+
+        # 2. Vehicle candidates in branch
+        vehicles = (
+            db.query(Vehicle)
+            .filter(
+                Vehicle.organization_id == route.organization_id,
+                Vehicle.branch_id == route.branch_id,
+            )
+            .all()
+        )
+
+        recommended_vehicles: List[VehicleAllocationCandidate] = []
+        route_weight = float(route.total_weight_kg or 0.0)
+
+        for v in vehicles:
+            blocking: List[str] = []
+            suitability: List[str] = []
+
+            max_w = float(v.max_weight_kg or 0.0)
+            util_pct = round((route_weight / max_w) * 100.0, 1) if max_w > 0 else 0.0
+
+            # Active dispatch check
+            active_route_v = (
+                db.query(DeliveryRoute)
+                .filter(
+                    DeliveryRoute.vehicle_id == v.id,
+                    DeliveryRoute.is_active_dispatch == True,
+                    DeliveryRoute.id != route.id,
+                )
+                .first()
+            )
+            if active_route_v:
+                blocking.append(f"Vehicle active in dispatched route {active_route_v.route_code}")
+
+            if v.status != VehicleStatus.AVAILABLE and v.id != route.vehicle_id:
+                blocking.append(f"Vehicle status is '{v.status.value}' (must be AVAILABLE)")
+
+            if max_w < route_weight:
+                blocking.append(
+                    f"Route weight ({route_weight} kg) exceeds maximum capacity ({max_w} kg)"
+                )
+
+            is_eligible = len(blocking) == 0
+            score = 100.0 if is_eligible else 0.0
+
+            if is_eligible:
+                suitability.append(f"Available with {max_w} kg rated payload capacity")
+                if 40.0 <= util_pct <= 90.0:
+                    suitability.append(f"Optimal payload utilization ({util_pct}%)")
+                    score += 25.0
+                elif util_pct < 40.0:
+                    suitability.append(f"Under-utilized capacity ({util_pct}%), feasible for dispatch")
+                    score += 10.0
+                else:
+                    suitability.append(f"Near-maximum capacity utilization ({util_pct}%)")
+                    score += 5.0
+
+                if v.id == route.vehicle_id:
+                    suitability.append("Currently assigned vehicle on planned route")
+                    score += 15.0
+
+            recommended_vehicles.append(
+                VehicleAllocationCandidate(
+                    vehicle_id=v.id,
+                    vehicle_number=v.vehicle_number,
+                    vehicle_type=v.vehicle_type.value,
+                    max_weight_kg=max_w,
+                    is_eligible=is_eligible,
+                    capacity_utilization_pct=util_pct if max_w > 0 else None,
+                    status=v.status.value,
+                    score=round(score, 1),
+                    suitability_reasons=suitability,
+                    blocking_reasons=blocking,
+                )
+            )
+
+        recommended_vehicles.sort(key=lambda c: (c.is_eligible, c.score), reverse=True)
+
+        return RouteAllocationRecommendationResponse(
+            route_id=route.id,
+            route_code=route.route_code,
+            total_weight_kg=route_weight,
+            estimated_duration_min=float(route.estimated_duration_min or 0.0),
+            recommended_drivers=recommended_drivers,
+            recommended_vehicles=recommended_vehicles,
+        )
+
+    @staticmethod
+    def ingest_driver_telemetry(
+        db: Session,
+        current_user: User,
+        route_id: int,
+        telemetry: DriverTelemetryInput,
+    ) -> DriverTelemetryResponse:
+        """
+        Ingest continuous GPS telemetry stream, evaluate freshness, and recalculate remaining ETAs.
+        """
+        route = RouteService._get_route_scoped(db, current_user, route_id)
+        if route.status not in (RouteStatus.DISPATCHED, RouteStatus.IN_PROGRESS):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Cannot ingest GPS telemetry for route in '{route.status.value}' state (must be DISPATCHED or IN_PROGRESS)",
+            )
+
+        if current_user.role == UserRole.DELIVERY_AGENT and route.driver_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Delivery agents may only submit telemetry for their own assigned route",
+            )
+
+        validate_lat_lng(telemetry.latitude, telemetry.longitude, "Driver GPS telemetry")
+        now = datetime.now(timezone.utc)
+        reported_ts = telemetry.timestamp or now
+        if reported_ts.tzinfo is None:
+            reported_ts = reported_ts.replace(tzinfo=timezone.utc)
+
+        # Reject out-of-order or stale telemetry older than last recorded telemetry
+        if route.last_telemetry_at:
+            prev_ts = route.last_telemetry_at
+            if prev_ts.tzinfo is None:
+                prev_ts = prev_ts.replace(tzinfo=timezone.utc)
+            if reported_ts <= prev_ts:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Stale telemetry: timestamp {reported_ts.isoformat()} is older than or equal to last recorded telemetry ({prev_ts.isoformat()})",
+                )
+
+        # Compute freshness
+        age_seconds = max(0.0, (now - reported_ts).total_seconds())
+        is_stale = age_seconds > 900.0  # 15 minutes freshness window
+
+        # Calculate remaining stops
+        mutable_stops = [
+            s for s in sorted(route.stops, key=lambda s: s.sequence_order)
+            if s.status in MUTABLE_STOP_STATUSES
+        ]
+
+        next_stop = mutable_stops[0] if mutable_stops else None
+        remaining_count = len(mutable_stops)
+        remaining_dist_km = 0.0
+        remaining_duration_min = 0.0
+        next_eta_min: Optional[float] = None
+
+        veh_type = route.vehicle.vehicle_type if route.vehicle else VehicleType.VAN
+        speed_kmh = VEHICLE_SPEED_KMH.get(veh_type, 38.0)
+
+        if mutable_stops:
+            cur_lat, cur_lng = telemetry.latitude, telemetry.longitude
+            cum_minutes = 0.0
+
+            for idx, stop_obj in enumerate(mutable_stops):
+                leg_km = round(estimate_road_distance_km(cur_lat, cur_lng, stop_obj.latitude, stop_obj.longitude), 3)
+                leg_min = (leg_km / speed_kmh) * 60.0 + float(stop_obj.service_duration_min or 5.0)
+
+                cum_minutes += leg_min
+                remaining_dist_km += leg_km
+                stop_obj.eta_minutes_from_start = round(cum_minutes, 1)
+                stop_obj.estimated_arrival_at = now + timedelta(minutes=cum_minutes)
+
+                if idx == 0:
+                    next_eta_min = round(leg_min, 1)
+
+                cur_lat, cur_lng = stop_obj.latitude, stop_obj.longitude
+
+            remaining_duration_min = round(cum_minutes, 1)
+
+        # Update route telemetry state
+        route.current_latitude = telemetry.latitude
+        route.current_longitude = telemetry.longitude
+        route.last_telemetry_at = now
+        route.eta_source = "GPS_ADJUSTED"
+        route.eta_calculated_at = now
+        route.updated_at = now
+
+        db.commit()
+
+        return DriverTelemetryResponse(
+            route_id=route.id,
+            current_latitude=telemetry.latitude,
+            current_longitude=telemetry.longitude,
+            freshness_seconds=round(age_seconds, 1),
+            is_stale=is_stale,
+            next_stop_id=next_stop.id if next_stop else None,
+            next_stop_eta_minutes=next_eta_min,
+            remaining_stops_count=remaining_count,
+            remaining_distance_km=round(remaining_dist_km, 2),
+            remaining_duration_min=remaining_duration_min,
+            eta_source="GPS_ADJUSTED",
+            recalculated_at=now,
+        )

@@ -2,7 +2,13 @@ from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum as SQLEnum, Text
 from sqlalchemy.orm import relationship
 from app.database.session import Base
-from app.models.enums import ServiceType, PaymentStatus, ParcelStatus
+from app.models.enums import (
+    CoordinateSource,
+    CoordinateVerificationStatus,
+    ParcelStatus,
+    PaymentStatus,
+    ServiceType,
+)
 
 
 class Parcel(Base):
@@ -35,6 +41,28 @@ class Parcel(Base):
     origin_longitude = Column(Float, nullable=True)
     dest_latitude = Column(Float, nullable=True)
     dest_longitude = Column(Float, nullable=True)
+    sender_normalized_address = Column(Text, nullable=True)
+    receiver_normalized_address = Column(Text, nullable=True)
+    origin_coordinate_source = Column(
+        SQLEnum(CoordinateSource), default=CoordinateSource.BRANCH_VICINITY_ESTIMATE, nullable=False
+    )
+    origin_confidence = Column(Float, nullable=True)
+    origin_verification_status = Column(
+        SQLEnum(CoordinateVerificationStatus),
+        default=CoordinateVerificationStatus.UNVERIFIED,
+        nullable=False,
+    )
+    origin_last_verified_at = Column(DateTime, nullable=True)
+    dest_coordinate_source = Column(
+        SQLEnum(CoordinateSource), default=CoordinateSource.BRANCH_VICINITY_ESTIMATE, nullable=False
+    )
+    dest_confidence = Column(Float, nullable=True)
+    dest_verification_status = Column(
+        SQLEnum(CoordinateVerificationStatus),
+        default=CoordinateVerificationStatus.UNVERIFIED,
+        nullable=False,
+    )
+    dest_last_verified_at = Column(DateTime, nullable=True)
 
     # Physical Attributes
     weight_kg = Column(Float, nullable=False)

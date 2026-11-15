@@ -16,7 +16,14 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from app.database.session import Base
-from app.models.enums import RouteObjective, RouteStatus, RouteStopStatus, RouteStopType
+from app.models.enums import (
+    CoordinateSource,
+    CoordinateVerificationStatus,
+    RouteObjective,
+    RouteStatus,
+    RouteStopStatus,
+    RouteStopType,
+)
 
 
 class DeliveryRoute(Base):
@@ -69,6 +76,18 @@ class DeliveryRoute(Base):
     route_geometry = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
     version_id = Column(Integer, default=1, nullable=False)
+    idempotency_key = Column(String(128), unique=True, nullable=True, index=True)
+    current_latitude = Column(Float, nullable=True)
+    current_longitude = Column(Float, nullable=True)
+    last_telemetry_at = Column(DateTime, nullable=True)
+    eta_source = Column(String(50), default="LOCAL_ESTIMATE", nullable=False)
+    eta_calculated_at = Column(DateTime, nullable=True)
+    has_low_confidence_stops = Column(Boolean, default=False, nullable=False)
+    low_confidence_override_reason = Column(Text, nullable=True)
+    low_confidence_overridden_by_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    low_confidence_overridden_at = Column(DateTime, nullable=True)
 
     created_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     dispatched_at = Column(DateTime, nullable=True)
@@ -136,8 +155,25 @@ class RouteStop(Base):
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     coords_source = Column(String(40), default="EXPLICIT", nullable=False)
+    coordinate_source = Column(
+        SQLEnum(CoordinateSource),
+        default=CoordinateSource.BRANCH_VICINITY_ESTIMATE,
+        nullable=False,
+    )
+    confidence = Column(Float, nullable=True)
+    verification_status = Column(
+        SQLEnum(CoordinateVerificationStatus),
+        default=CoordinateVerificationStatus.UNVERIFIED,
+        nullable=False,
+    )
+    last_verified_at = Column(DateTime, nullable=True)
+    normalized_address = Column(Text, nullable=True)
     distance_from_prev_km = Column(Float, default=0.0, nullable=False)
     eta_minutes_from_start = Column(Float, default=0.0, nullable=False)
+    time_window_start = Column(DateTime, nullable=True)
+    time_window_end = Column(DateTime, nullable=True)
+    waiting_time_min = Column(Float, default=0.0, nullable=False)
+    service_duration_min = Column(Float, default=5.0, nullable=False)
     estimated_arrival_at = Column(DateTime, nullable=True)
     arrived_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)

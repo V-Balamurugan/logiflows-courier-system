@@ -5,6 +5,8 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.enums import (
+    CoordinateSource,
+    CoordinateVerificationStatus,
     RouteObjective,
     RouteStatus,
     RouteStopStatus,
@@ -97,6 +99,7 @@ class RouteReoptimizeRequest(BaseModel):
     return_to_hub: Optional[bool] = None
     manual_stop_ids: Optional[List[int]] = None
     expected_version_id: Optional[int] = None
+    idempotency_key: Optional[str] = Field(None, max_length=128)
 
     @model_validator(mode="after")
     def validate_manual_order(self) -> "RouteReoptimizeRequest":
@@ -115,6 +118,8 @@ class RouteDispatchRequest(BaseModel):
     driver_id: Optional[int] = None
     vehicle_id: Optional[int] = None
     expected_version_id: Optional[int] = None
+    idempotency_key: Optional[str] = Field(None, max_length=128)
+    low_confidence_override_reason: Optional[str] = Field(None, max_length=500)
     notes: Optional[str] = Field(None, max_length=500)
 
 
@@ -163,6 +168,9 @@ class RoutePreviewStop(BaseModel):
     latitude: float
     longitude: float
     coords_source: str
+    coordinate_source: CoordinateSource = CoordinateSource.BRANCH_VICINITY_ESTIMATE
+    confidence: Optional[float] = None
+    verification_status: CoordinateVerificationStatus = CoordinateVerificationStatus.UNVERIFIED
     parcel_weight_kg: float = 0.0
     distance_from_prev_km: float
     eta_minutes_from_start: float
@@ -186,6 +194,8 @@ class RoutePreviewResponse(BaseModel):
     provider_used: str
     is_fallback: bool
     fallback_reason: Optional[str] = None
+    has_low_confidence_stops: bool = False
+    low_confidence_stops_count: int = 0
     baseline_distance_km: float
     total_distance_km: float
     distance_saved_km: float
@@ -216,6 +226,11 @@ class RouteStopResponse(BaseModel):
     latitude: float
     longitude: float
     coords_source: str
+    coordinate_source: CoordinateSource = CoordinateSource.BRANCH_VICINITY_ESTIMATE
+    confidence: Optional[float] = None
+    verification_status: CoordinateVerificationStatus = CoordinateVerificationStatus.UNVERIFIED
+    last_verified_at: Optional[datetime] = None
+    normalized_address: Optional[str] = None
     distance_from_prev_km: float
     eta_minutes_from_start: float
     estimated_arrival_at: Optional[datetime] = None
@@ -262,6 +277,11 @@ class DeliveryRouteResponse(BaseModel):
     geometry_points: List[List[float]] = []
     notes: Optional[str] = None
     version_id: int
+    idempotency_key: Optional[str] = None
+    has_low_confidence_stops: bool = False
+    low_confidence_override_reason: Optional[str] = None
+    low_confidence_overridden_by_id: Optional[int] = None
+    low_confidence_overridden_at: Optional[datetime] = None
     dispatched_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
@@ -269,3 +289,72 @@ class DeliveryRouteResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
     stops: List[RouteStopResponse] = []
+
+class DriverAllocationCandidate(BaseModel):
+    """Explainable evaluation of a delivery driver candidate for route dispatch."""
+
+    driver_id: int
+    driver_name: str
+    employee_code: Optional[str] = None
+    is_eligible: bool
+    current_active_routes: int = 0
+    current_active_assignments: int = 0
+    shift: Optional[str] = None
+    score: float = 0.0
+    suitability_reasons: List[str] = []
+    blocking_reasons: List[str] = []
+
+
+class VehicleAllocationCandidate(BaseModel):
+    """Explainable evaluation of a fleet vehicle candidate for route dispatch."""
+
+    vehicle_id: int
+    vehicle_number: str
+    vehicle_type: str
+    max_weight_kg: float
+    is_eligible: bool
+    capacity_utilization_pct: Optional[float] = None
+    status: str
+    score: float = 0.0
+    suitability_reasons: List[str] = []
+    blocking_reasons: List[str] = []
+
+
+class RouteAllocationRecommendationResponse(BaseModel):
+    """Explainable ranked driver and vehicle allocation recommendations."""
+
+    route_id: int
+    route_code: str
+    total_weight_kg: float
+    estimated_duration_min: float
+    recommended_drivers: List[DriverAllocationCandidate]
+    recommended_vehicles: List[VehicleAllocationCandidate]
+
+class DriverTelemetryInput(BaseModel):
+    """Driver location telemetry stream update."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    latitude: float = Field(..., ge=-90.0, le=90.0)
+    longitude: float = Field(..., ge=-180.0, le=180.0)
+    speed_kmh: Optional[float] = Field(None, ge=0.0, le=250.0)
+    heading_deg: Optional[float] = Field(None, ge=0.0, le=360.0)
+    accuracy_m: Optional[float] = Field(None, ge=0.0, le=500.0)
+    timestamp: Optional[datetime] = None
+
+
+class DriverTelemetryResponse(BaseModel):
+    """Dynamic ETA recalibration response derived from driver GPS telemetry."""
+
+    route_id: int
+    current_latitude: float
+    current_longitude: float
+    freshness_seconds: float
+    is_stale: bool
+    next_stop_id: Optional[int] = None
+    next_stop_eta_minutes: Optional[float] = None
+    remaining_stops_count: int
+    remaining_distance_km: float
+    remaining_duration_min: float
+    eta_source: str = "GPS_ADJUSTED"
+    recalculated_at: datetime
