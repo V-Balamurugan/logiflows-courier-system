@@ -1,10 +1,14 @@
 """FastAPI endpoints for Phase 15 dynamic route optimization and execution."""
+import asyncio
+from datetime import datetime, timezone
+import json
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
-from app.dependencies.auth_deps import require_branch_manager_or_higher, require_staff
+from app.dependencies.auth_deps import require_branch_manager_or_higher, require_staff, get_current_user
 from app.models.enums import RouteStatus
 from app.models.user import User
 from app.schemas.route import (
@@ -20,6 +24,7 @@ from app.schemas.route import (
     RouteReoptimizeRequest,
     RouteStopUpdateRequest,
 )
+from app.services.broadcaster import route_event_broadcaster
 from app.services.route_service import RouteService
 from app.services.routing_providers import RoutingEngine
 
@@ -162,3 +167,53 @@ def ingest_driver_telemetry(
 ):
     """Ingest driver GPS stream, check freshness, and recalculate dynamic remaining ETAs."""
     return RouteService.ingest_driver_telemetry(db, current_user, route_id, req)
+
+
+@router.get("/{route_id}/events")
+async def stream_route_events(
+    route_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Server-Sent Events (SSE) streaming endpoint for real-time route lifecycle and telemetry events.
+    Yields events post-commit: ROUTE_DISPATCHED, DRIVER_ASSIGNED, ROUTE_STARTED, STOP_COMPLETED,
+    DELIVERY_FAILED, ETA_CHANGED, ROUTE_DELAYED, ROUTE_REOPTIMIZED.
+    """
+    route = RouteService._get_route_scoped(db, current_user, route_id)
+    queue = route_event_broadcaster.subscribe(str(route.id))
+
+    async def event_generator():
+        initial_data = {
+            "type": "INITIAL_STATE",
+            "route_id": route.id,
+            "route_code": route.route_code,
+            "status": route.status.value,
+            "driver_id": route.driver_id,
+            "vehicle_id": route.vehicle_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        yield f"data: {json.dumps(initial_data)}\n\n"
+
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event_data = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    yield f"data: {json.dumps(event_data)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keep-alive\n\n"
+        finally:
+            route_event_broadcaster.unsubscribe(str(route.id), queue)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

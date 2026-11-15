@@ -57,6 +57,7 @@ from app.schemas.route import (
     RouteStopUpdateRequest,
     VehicleAllocationCandidate,
 )
+from app.services.broadcaster import route_event_broadcaster
 from app.services.geocoding_service import GeocodingService, normalize_address
 from app.services.routing.base import validate_lat_lng
 from app.services.routing_providers import (
@@ -1091,6 +1092,17 @@ class RouteService:
                 detail="Route was modified concurrently. Please refresh and retry.",
             )
 
+        route_event_broadcaster.broadcast(
+            str(route.id),
+            "ROUTE_REOPTIMIZED",
+            {
+                "route_id": route.id,
+                "route_code": route.route_code,
+                "total_distance_km": float(route.total_distance_km or 0.0),
+                "total_duration_min": float(route.estimated_duration_min or 0.0),
+            },
+        )
+
         return RouteService.get_route(db, current_user, route.id)
 
     @staticmethod
@@ -1342,6 +1354,27 @@ class RouteService:
         for b in broadcasts:
             ShipmentStateMachine.broadcast_milestone(**b)
 
+        route_event_broadcaster.broadcast(
+            str(route.id),
+            "ROUTE_DISPATCHED",
+            {
+                "route_id": route.id,
+                "route_code": route.route_code,
+                "driver_id": route.driver_id,
+                "vehicle_id": route.vehicle_id,
+            },
+        )
+        route_event_broadcaster.broadcast(
+            str(route.id),
+            "DRIVER_ASSIGNED",
+            {
+                "route_id": route.id,
+                "route_code": route.route_code,
+                "driver_id": route.driver_id,
+                "vehicle_id": route.vehicle_id,
+            },
+        )
+
         return RouteService.get_route(db, current_user, route.id)
 
     @staticmethod
@@ -1369,6 +1402,15 @@ class RouteService:
             first_pending.status = RouteStopStatus.EN_ROUTE
 
         db.commit()
+        route_event_broadcaster.broadcast(
+            str(route.id),
+            "ROUTE_STARTED",
+            {
+                "route_id": route.id,
+                "route_code": route.route_code,
+                "started_at": now.isoformat(),
+            },
+        )
         return RouteService.get_route(db, current_user, route.id)
 
     @staticmethod
@@ -1637,6 +1679,30 @@ class RouteService:
         for b in broadcasts:
             ShipmentStateMachine.broadcast_milestone(**b)
 
+        if req.status == RouteStopStatus.COMPLETED:
+            route_event_broadcaster.broadcast(
+                str(route.id),
+                "STOP_COMPLETED",
+                {
+                    "route_id": route.id,
+                    "route_code": route.route_code,
+                    "stop_id": stop_obj.id,
+                    "sequence_order": stop_obj.sequence_order,
+                },
+            )
+        elif req.status == RouteStopStatus.FAILED:
+            route_event_broadcaster.broadcast(
+                str(route.id),
+                "DELIVERY_FAILED",
+                {
+                    "route_id": route.id,
+                    "route_code": route.route_code,
+                    "stop_id": stop_obj.id,
+                    "sequence_order": stop_obj.sequence_order,
+                    "failure_reason": req.failure_reason,
+                },
+            )
+
         return RouteService.get_route(db, current_user, route.id)
 
     @staticmethod
@@ -1752,6 +1818,16 @@ class RouteService:
 
         for b in broadcasts:
             ShipmentStateMachine.broadcast_milestone(**b)
+
+        route_event_broadcaster.broadcast(
+            str(route.id),
+            "ROUTE_CANCELLED",
+            {
+                "route_id": route.id,
+                "route_code": route.route_code,
+                "cancelled_at": now.isoformat(),
+            },
+        )
 
         return RouteService.get_route(db, current_user, route.id)
 
@@ -1960,7 +2036,7 @@ class RouteService:
                 prev_ts = prev_ts.replace(tzinfo=timezone.utc)
             if reported_ts <= prev_ts:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=f"Stale telemetry: timestamp {reported_ts.isoformat()} is older than or equal to last recorded telemetry ({prev_ts.isoformat()})",
                 )
 
@@ -2012,6 +2088,28 @@ class RouteService:
         route.updated_at = now
 
         db.commit()
+
+        route_event_broadcaster.broadcast(
+            str(route.id),
+            "ETA_CHANGED",
+            {
+                "route_id": route.id,
+                "route_code": route.route_code,
+                "remaining_stops_count": remaining_count,
+                "remaining_distance_km": round(remaining_dist_km, 2),
+                "remaining_duration_min": remaining_duration_min,
+            },
+        )
+        if remaining_duration_min > (float(route.estimated_duration_min or 0.0) + 15.0):
+            route_event_broadcaster.broadcast(
+                str(route.id),
+                "ROUTE_DELAYED",
+                {
+                    "route_id": route.id,
+                    "route_code": route.route_code,
+                    "delay_minutes": round(remaining_duration_min - float(route.estimated_duration_min or 0.0), 1),
+                },
+            )
 
         return DriverTelemetryResponse(
             route_id=route.id,
