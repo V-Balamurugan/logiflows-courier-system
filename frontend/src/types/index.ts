@@ -510,6 +510,9 @@ export interface RouteStop {
   latitude: number;
   longitude: number;
   coords_source: string;
+  coordinate_source?: string;
+  confidence?: number;
+  verification_status?: string;
   distance_from_prev_km: number;
   eta_minutes_from_start: number;
   estimated_arrival_at?: string;
@@ -550,6 +553,12 @@ export interface DeliveryRoute {
   total_stops: number;
   completed_stops: number;
   geometry_points: [number, number][];
+  has_low_confidence_stops?: boolean;
+  low_confidence_override_reason?: string;
+  current_latitude?: number | null;
+  current_longitude?: number | null;
+  last_telemetry_at?: string | null;
+  eta_source?: string;
   notes?: string;
   version_id: number;
   dispatched_at?: string;
@@ -559,4 +568,39 @@ export interface DeliveryRoute {
   created_at: string;
   updated_at?: string;
   stops: RouteStop[];
+}
+
+export interface DriverAllocationCandidate {
+  driver_id: number;
+  driver_name: string;
+  employee_code?: string;
+  is_eligible: boolean;
+  current_active_routes: number;
+  current_active_assignments: number;
+  shift?: string;
+  score: number;
+  suitability_reasons: string[];
+  blocking_reasons: string[];
+}
+
+export interface VehicleAllocationCandidate {
+  vehicle_id: number;
+  vehicle_number: string;
+  vehicle_type: string;
+  max_weight_kg: number;
+  is_eligible: boolean;
+  capacity_utilization_pct?: number;
+  status: string;
+  score: number;
+  suitability_reasons: string[];
+  blocking_reasons: string[];
+}
+
+export interface RouteAllocationRecommendationResponse {
+  route_id: number;
+  route_code: string;
+  total_weight_kg: number;
+  estimated_duration_min: number;
+  recommended_drivers: DriverAllocationCandidate[];
+  recommended_vehicles: VehicleAllocationCandidate[];
 }

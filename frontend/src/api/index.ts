@@ -540,9 +540,25 @@ export const routeApi = {
       vehicle_id?: number;
       expected_version_id?: number;
       notes?: string;
+      low_confidence_override_reason?: string;
     }
   ): Promise<DeliveryRoute> => {
     const res = await api.post<DeliveryRoute>(`/routes/${id}/dispatch`, data);
+    return res.data;
+  },
+  getAllocationRecommendations: async (id: number): Promise<any> => {
+    const res = await api.get(`/routes/${id}/allocation-recommendations`);
+    return res.data;
+  },
+  sendTelemetry: async (
+    id: number,
+    data: { latitude: number; longitude: number; speed_kmh?: number; timestamp?: string }
+  ): Promise<any> => {
+    const res = await api.post(`/routes/${id}/telemetry`, data);
+    return res.data;
+  },
+  getProvidersHealth: async (): Promise<any> => {
+    const res = await api.get('/routes/providers/health');
     return res.data;
   },
   start: async (id: number): Promise<DeliveryRoute> => {

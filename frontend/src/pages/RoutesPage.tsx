@@ -95,7 +95,17 @@ export const RoutesPage: React.FC = () => {
 
   // Dispatch Modal
   const [dispatchModalOpen, setDispatchModalOpen] = useState(false);
-  const [dispatchForm, setDispatchForm] = useState({ vehicle_id: '', driver_id: '', notes: '' });
+  const [dispatchForm, setDispatchForm] = useState({
+    vehicle_id: '',
+    driver_id: '',
+    notes: '',
+    low_confidence_override_reason: '',
+  });
+
+  // Allocation Recommendations Modal
+  const [allocModalOpen, setAllocModalOpen] = useState(false);
+  const [allocRecs, setAllocRecs] = useState<any | null>(null);
+  const [loadingAllocRecs, setLoadingAllocRecs] = useState(false);
 
   // Cancel Modal
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
@@ -353,13 +363,40 @@ export const RoutesPage: React.FC = () => {
       vehicle_id: selectedRoute.vehicle_id ? String(selectedRoute.vehicle_id) : '',
       driver_id: selectedRoute.driver_id ? String(selectedRoute.driver_id) : '',
       notes: '',
+      low_confidence_override_reason: selectedRoute.low_confidence_override_reason || '',
     });
     setDispatchModalOpen(true);
+  };
+
+  const handleOpenAllocRecs = async () => {
+    if (!selectedRoute) return;
+    setAllocModalOpen(true);
+    setLoadingAllocRecs(true);
+    setErrorMsg(null);
+    try {
+      const data = await routeApi.getAllocationRecommendations(selectedRoute.id);
+      setAllocRecs(data);
+    } catch (err) {
+      setErrorMsg(extractError(err, 'Failed to fetch allocation recommendations.'));
+    } finally {
+      setLoadingAllocRecs(false);
+    }
   };
 
   const handleDispatchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRoute) return;
+
+    if (
+      selectedRoute.has_low_confidence_stops &&
+      dispatchForm.low_confidence_override_reason.trim().length < 10
+    ) {
+      setErrorMsg(
+        'Manager override justification (minimum 10 characters) is required to dispatch routes with low-confidence stops.'
+      );
+      return;
+    }
+
     setSubmitting(true);
     setErrorMsg(null);
     try {
@@ -368,6 +405,7 @@ export const RoutesPage: React.FC = () => {
         driver_id: dispatchForm.driver_id ? Number(dispatchForm.driver_id) : undefined,
         expected_version_id: selectedRoute.version_id,
         notes: dispatchForm.notes.trim() || undefined,
+        low_confidence_override_reason: dispatchForm.low_confidence_override_reason.trim() || undefined,
       });
       setSelectedRoute(updated);
       setDispatchModalOpen(false);
@@ -1017,6 +1055,16 @@ export const RoutesPage: React.FC = () => {
                       <button
                         type="button"
                         disabled={submitting}
+                        onClick={handleOpenAllocRecs}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-bold hover:bg-indigo-100"
+                        title="AI-assisted driver and vehicle allocation recommendations"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Allocation AI
+                      </button>
+                      <button
+                        type="button"
+                        disabled={submitting}
                         onClick={() => handleReoptimizeSelected('SHORTEST')}
                         className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50"
                       >
@@ -1105,6 +1153,10 @@ export const RoutesPage: React.FC = () => {
                 depotName={selectedRoute.branch_name || 'Branch Depot'}
                 stops={activeMapStops}
                 routePolyline={activePolyline}
+                driverLat={selectedRoute.current_latitude}
+                driverLng={selectedRoute.current_longitude}
+                driverName={selectedRoute.driver_name}
+                driverLastSeen={selectedRoute.last_telemetry_at || undefined}
               />
 
               {/* Ordered Stop Itinerary */}
@@ -1152,12 +1204,21 @@ export const RoutesPage: React.FC = () => {
                             <span>ETA: +{stop.eta_minutes_from_start.toFixed(0)} min</span>
                             <span
                               className={`font-semibold ${
-                                stop.coords_source === 'BRANCH_VICINITY_ESTIMATE'
+                                (stop.coordinate_source || stop.coords_source) === 'BRANCH_VICINITY_ESTIMATE'
                                   ? 'text-amber-700'
-                                  : 'text-emerald-700'
+                                  : (stop.coordinate_source || stop.coords_source) === 'VERIFIED_GPS'
+                                    ? 'text-emerald-700'
+                                    : 'text-indigo-700'
                               }`}
                             >
-                              Coords: {stop.coords_source === 'BRANCH_VICINITY_ESTIMATE' ? 'Vicinity Est.' : stop.coords_source}
+                              Coords: {(stop.coordinate_source || stop.coords_source) === 'BRANCH_VICINITY_ESTIMATE'
+                                ? 'Vicinity Est.'
+                                : (stop.coordinate_source || stop.coords_source) === 'VERIFIED_GPS'
+                                  ? 'Verified GPS'
+                                  : (stop.coordinate_source || stop.coords_source) === 'VERIFIED_GEOCODING'
+                                    ? 'Geocoded'
+                                    : (stop.coordinate_source || stop.coords_source || 'EXPLICIT')}
+                              {stop.confidence != null ? ` (${Math.round(stop.confidence * 100)}%)` : ''}
                             </span>
                           </div>
                           {stop.failure_reason && (
@@ -1287,6 +1348,37 @@ export const RoutesPage: React.FC = () => {
               ))}
             </select>
           </div>
+          {selectedRoute?.has_low_confidence_stops && (
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs space-y-1.5">
+              <div className="flex items-center gap-2 font-bold text-amber-900">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Low-Confidence Stop Dispatch Guard</span>
+              </div>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                This route contains address stops with estimated or unverified coordinates. Manager verification and an explicit override justification (minimum 10 characters) are required to proceed with dispatch.
+              </p>
+              <div>
+                <label htmlFor="low-conf-override" className="block text-[11px] font-bold text-amber-900 mt-2 mb-1">
+                  Manager Override Justification *
+                </label>
+                <input
+                  id="low-conf-override"
+                  type="text"
+                  required
+                  minLength={10}
+                  value={dispatchForm.low_confidence_override_reason}
+                  onChange={(e) =>
+                    setDispatchForm({ ...dispatchForm, low_confidence_override_reason: e.target.value })
+                  }
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-amber-300 bg-white text-slate-900 focus:ring-2 focus:ring-amber-500"
+                  placeholder="e.g. Phone-verified receiver address; landmarks confirmed"
+                />
+                <div className="text-[10px] text-amber-700 mt-1">
+                  {dispatchForm.low_confidence_override_reason.length}/10 characters minimum
+                </div>
+              </div>
+            </div>
+          )}
           <div>
             <label htmlFor="dispatch-notes" className="block text-xs font-bold text-slate-700 mb-1">
               Dispatch Instructions (Optional)
@@ -1317,6 +1409,162 @@ export const RoutesPage: React.FC = () => {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Allocation Recommendations Modal */}
+      <Modal
+        isOpen={allocModalOpen}
+        onClose={() => setAllocModalOpen(false)}
+        title="AI-Assisted Allocation Recommendations"
+        maxWidth="lg"
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-slate-500">
+            Explainable driver and vehicle allocation suggestions based on live workload, shift, branch proximity, and vehicle capacity.
+          </p>
+
+          {loadingAllocRecs ? (
+            <div className="py-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+              <RefreshCw className="w-4 h-4 animate-spin text-indigo-600" />
+              <span>Evaluating driver availability and fleet payload fit...</span>
+            </div>
+          ) : allocRecs ? (
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
+                  Recommended Drivers
+                </h4>
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {allocRecs.recommended_drivers?.map((d: any) => (
+                    <div
+                      key={d.driver_id}
+                      className={`p-2.5 rounded-xl border flex items-center justify-between text-xs ${
+                        d.is_eligible
+                          ? 'border-emerald-200 bg-emerald-50/50'
+                          : 'border-slate-200 bg-slate-50 opacity-70'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-bold text-slate-900 flex items-center gap-2">
+                          <span>{d.driver_name}</span>
+                          <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded font-extrabold ${
+                              d.is_eligible ? 'bg-emerald-200 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                            }`}
+                          >
+                            {d.is_eligible ? 'Eligible' : 'Blocked'}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-0.5">
+                          Active Routes: {d.current_active_routes} · Assignments: {d.current_active_assignments}
+                        </div>
+                        {d.suitability_reasons?.length > 0 && (
+                          <div className="text-[10px] text-emerald-700 mt-1">
+                            ✓ {d.suitability_reasons.join(' · ')}
+                          </div>
+                        )}
+                        {d.blocking_reasons?.length > 0 && (
+                          <div className="text-[10px] text-rose-600 mt-1">
+                            ⚠ {d.blocking_reasons.join(' · ')}
+                          </div>
+                        )}
+                      </div>
+                      {d.is_eligible && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDispatchForm((prev) => ({ ...prev, driver_id: String(d.driver_id) }));
+                            setAllocModalOpen(false);
+                            setDispatchModalOpen(true);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-[11px] font-bold hover:bg-indigo-700 shrink-0"
+                        >
+                          Select
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
+                  Fleet Vehicle Fit
+                </h4>
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {allocRecs.recommended_vehicles?.map((v: any) => (
+                    <div
+                      key={v.vehicle_id}
+                      className={`p-2.5 rounded-xl border flex items-center justify-between text-xs ${
+                        v.is_eligible
+                          ? 'border-emerald-200 bg-emerald-50/50'
+                          : 'border-slate-200 bg-slate-50 opacity-70'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-bold text-slate-900 flex items-center gap-2">
+                          <span>{v.vehicle_number}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-extrabold bg-slate-200 text-slate-700 uppercase">
+                            {v.vehicle_type}
+                          </span>
+                          <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded font-extrabold ${
+                              v.is_eligible ? 'bg-emerald-200 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                            }`}
+                          >
+                            {v.is_eligible ? 'Compatible' : 'Ineligible'}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-0.5">
+                          Max Payload: {v.max_weight_kg} kg
+                          {v.capacity_utilization_pct != null &&
+                            ` · Est. Utilization: ${v.capacity_utilization_pct.toFixed(1)}%`}
+                        </div>
+                        {v.suitability_reasons?.length > 0 && (
+                          <div className="text-[10px] text-emerald-700 mt-1">
+                            ✓ {v.suitability_reasons.join(' · ')}
+                          </div>
+                        )}
+                        {v.blocking_reasons?.length > 0 && (
+                          <div className="text-[10px] text-rose-600 mt-1">
+                            ⚠ {v.blocking_reasons.join(' · ')}
+                          </div>
+                        )}
+                      </div>
+                      {v.is_eligible && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDispatchForm((prev) => ({ ...prev, vehicle_id: String(v.vehicle_id) }));
+                            setAllocModalOpen(false);
+                            setDispatchModalOpen(true);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-[11px] font-bold hover:bg-indigo-700 shrink-0"
+                        >
+                          Select
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="py-4 text-center text-xs text-slate-400">
+              No allocation candidates found for this route's branch.
+            </div>
+          )}
+
+          <div className="flex justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => setAllocModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              Close
+            </button>
+          </div>
+        </div>
       </Modal>
 
       {/* Stop Update Modal */}

@@ -29,6 +29,10 @@ interface LeafletMapProps {
   stops?: MapStopMarker[];
   routePolyline?: [number, number][];
   heightClassName?: string;
+  driverLat?: number | null;
+  driverLng?: number | null;
+  driverName?: string;
+  driverLastSeen?: string;
 }
 
 const isValidCoord = (lat?: number | null, lng?: number | null): boolean => {
@@ -77,6 +81,10 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
   stops,
   routePolyline,
   heightClassName = 'h-80',
+  driverLat,
+  driverLng,
+  driverName = 'Assigned Driver',
+  driverLastSeen,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -87,9 +95,11 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
   const hasDest = isValidCoord(destLat, destLng);
   const hasCurrent = isValidCoord(currentLat, currentLng);
   const hasDepot = isValidCoord(depotLat, depotLng);
+  const hasDriver = isValidCoord(driverLat, driverLng);
   const hasAnyCoords =
-    hasOrigin || hasDest || hasCurrent || hasDepot || validStops.length > 0 || validPolyline.length > 0;
-  const routeSignature = JSON.stringify({ validStops, validPolyline, depotLat, depotLng, depotName });
+    hasOrigin || hasDest || hasCurrent || hasDepot || hasDriver || validStops.length > 0 || validPolyline.length > 0;
+  const isEstimatedLocal = validStops.length > 0 && validPolyline.length === 0;
+  const routeSignature = JSON.stringify({ validStops, validPolyline, depotLat, depotLng, depotName, driverLat, driverLng });
 
   useEffect(() => {
     if (!mapContainerRef.current || !hasAnyCoords) return;
@@ -190,6 +200,18 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
           .bindPopup(`<b>Hub Depot:</b> ${escapeHtml(depotName)}`);
       }
 
+      // Add Driver Live Telemetry Marker
+      if (hasDriver) {
+        const driverLatLng: [number, number] = [driverLat!, driverLng!];
+        latLngs.push(driverLatLng);
+        L.marker(driverLatLng, { icon: createMarkerIcon('#059669', '🚗') })
+          .addTo(map)
+          .bindPopup(
+            `<b>Driver:</b> ${escapeHtml(driverName)}<br/>` +
+            `<small>Live Location${driverLastSeen ? ` • ${escapeHtml(driverLastSeen)}` : ''}</small>`
+          );
+      }
+
       // Add Numbered Route Stop Pins
       validStops.forEach((stop) => {
         const stopLatLng: [number, number] = [stop.latitude, stop.longitude];
@@ -224,6 +246,9 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
         if (typeof polyline?.getBounds === 'function') {
           map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
         }
+      } else if (latLngs.length > 0) {
+        const bounds = L.latLngBounds(latLngs);
+        map.fitBounds(bounds, { padding: [50, 50] });
       }
     } catch (err) {
       console.error('Failed to initialize Leaflet map:', err);
@@ -254,6 +279,11 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
   return (
     <div className={`relative w-full ${heightClassName} rounded-2xl overflow-hidden border border-slate-200 shadow-inner z-0`}>
       <div ref={mapContainerRef} className="w-full h-full" />
+      {isEstimatedLocal && (
+        <div className="absolute top-3 right-3 bg-amber-600/90 text-white text-xs font-semibold px-3 py-1.5 rounded-xl shadow-md z-[1000] flex items-center gap-1.5 backdrop-blur-sm pointer-events-none">
+          <span>Estimated (No road geometry)</span>
+        </div>
+      )}
     </div>
   );
 };
